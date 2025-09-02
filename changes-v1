@@ -1,0 +1,769 @@
+# Complete Banking System - Full Files
+
+## Backend Changes
+
+### 1. Updated AuthController2.java (Support Email Login)
+
+```java
+package com.simplebanking.controller;
+
+import com.simplebanking.model.User2;
+import com.simplebanking.service.UserService2;
+import com.simplebanking.security.JwtUtil2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import java.util.HashMap;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/auth2")
+@CrossOrigin(origins = "http://localhost:3000")
+public class AuthController2 {
+    
+    @Autowired
+    private UserService2 userService;
+    
+    @Autowired
+    private JwtUtil2 jwtUtil;
+    
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+    
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestBody Map<String, String> loginRequest) {
+        try {
+            String username = loginRequest.get("username");
+            String email = loginRequest.get("email");
+            String password = loginRequest.get("password");
+            
+            User2 user;
+            
+            // Support both email and username login
+            if (email != null && !email.isEmpty()) {
+                user = userService.getUserByEmail(email);
+                if (!passwordEncoder.matches(password, user.getPassword())) {
+                    user.setFailedAttempts(user.getFailedAttempts() + 1);
+                    userService.updateUser(user);
+                    throw new RuntimeException("Invalid credentials");
+                }
+            } else if (username != null && !username.isEmpty()) {
+                user = userService.authenticateUser(username, password);
+            } else {
+                throw new RuntimeException("Email or username is required");
+            }
+            
+            // Reset failed attempts on successful login
+            user.setFailedAttempts(0);
+            userService.updateUser(user);
+            
+            // Generate JWT token
+            String token = jwtUtil.generateToken(
+                user.getId(), 
+                user.getUsername(), 
+                user.getUserType(), 
+                user.getUserDepartment()
+            );
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("token", token);
+            response.put("userId", user.getId());
+            response.put("username", user.getUsername());
+            response.put("userType", user.getUserType());
+            response.put("department", user.getUserDepartment());
+            response.put("fullName", user.getFullName());
+            response.put("country", user.getCountry());
+            response.put("email", user.getEmail());
+            response.put("message", "Login successful");
+            
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.status(401).body(errorResponse);
+        }
+    }
+    
+    @PostMapping("/register")
+    public ResponseEntity<?> register(@RequestBody User2 user) {
+        try {
+            // Check if username or email already exists
+            if (userService.existsByUsername(user.getUsername())) {
+                throw new RuntimeException("Username already exists");
+            }
+            if (userService.existsByEmail(user.getEmail())) {
+                throw new RuntimeException("Email already exists");
+            }
+            
+            // Set default values
+            user.setFailedAttempts(0);
+            user.setStatus("Active");
+            if (user.getCountry() == null) {
+                user.setCountry("IN");
+            }
+            if (user.getUserType() == null) {
+                user.setUserType("EMPLOYEE");
+            }
+            if (user.getUserDepartment() == null) {
+                user.setUserDepartment("Technology");
+            }
+            
+            User2 createdUser = userService.createUser(user);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "User registered successfully");
+            response.put("userId", createdUser.getId());
+            response.put("username", createdUser.getUsername());
+            response.put("email", createdUser.getEmail());
+            
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.status(400).body(errorResponse);
+        }
+    }
+    
+    @PostMapping("/validate")
+    public ResponseEntity<?> validateToken(@RequestHeader("Authorization") String authHeader) {
+        try {
+            String token = authHeader.substring(7); // Remove "Bearer " prefix
+            
+            if (jwtUtil.validateToken(token) && !jwtUtil.isTokenExpired(token)) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("valid", true);
+                response.put("userId", jwtUtil.getUserIdFromToken(token));
+                response.put("username", jwtUtil.getUsernameFromToken(token));
+                response.put("userType", jwtUtil.getUserTypeFromToken(token));
+                response.put("department", jwtUtil.getDepartmentFromToken(token));
+                
+                return ResponseEntity.ok(response);
+            } else {
+                throw new RuntimeException("Invalid or expired token");
+            }
+        } catch (Exception e) {
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Invalid token");
+            return ResponseEntity.status(401).body(errorResponse);
+        }
+    }
+}
+```
+
+### 2. Updated SecurityConfig2.java (Support Both Auth Systems)
+
+```java
+package com.simplebanking.config;
+
+import com.simplebanking.security.JwtAuthenticationFilter2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import java.util.Arrays;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig2 {
+    
+    @Autowired
+    private JwtAuthenticationFilter2 jwtAuthenticationFilter;
+    
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http.cors().and().csrf().disable()
+            .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            .and()
+            .authorizeHttpRequests(authz -> authz
+                .requestMatchers("/api/auth/**").permitAll()   // Original auth system
+                .requestMatchers("/api/auth2/**").permitAll()  // Your JWT auth system
+                
+                // Swagger endpoints
+                .requestMatchers("/swagger-ui/**").permitAll()
+                .requestMatchers("/swagger-ui.html").permitAll() 
+                .requestMatchers("/v3/api-docs/**").permitAll()
+                .requestMatchers("/swagger-resources/**").permitAll()
+                .requestMatchers("/webjars/**").permitAll()
+                
+                .requestMatchers("/api/accounts2/**").authenticated()
+                .requestMatchers("/api/transactions2/**").authenticated()
+                .requestMatchers("/api/data2/**").authenticated()
+                .requestMatchers("/api/users2/**").authenticated()
+                .anyRequest().authenticated()
+            )
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        
+        return http.build();
+    }
+    
+    @Bean("passwordEncoder2")
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+    
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setAllowCredentials(true);
+        
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+}
+```
+
+### 3. Updated UserService2.java (Support Password Encoder Bean Name)
+
+```java
+package com.simplebanking.service;
+
+import com.simplebanking.model.User2;
+import com.simplebanking.repository.UserRepository2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import java.util.List;
+import java.util.Optional;
+
+@Service
+public class UserService2 {
+    
+    @Autowired
+    private UserRepository2 userRepository;
+    
+    @Autowired
+    @Qualifier("passwordEncoder2")
+    private PasswordEncoder passwordEncoder;
+    
+    public List<User2> getAllUsers() {
+        return userRepository.findAll();
+    }
+    
+    public User2 getUserById(Integer userId) {
+        Optional<User2> user = userRepository.findById(userId);
+        if (user.isPresent()) {
+            return user.get();
+        }
+        throw new RuntimeException("User not found with ID: " + userId);
+    }
+    
+    public User2 getUserByUsername(String username) {
+        Optional<User2> user = userRepository.findByUsername(username);
+        if (user.isPresent()) {
+            return user.get();
+        }
+        throw new RuntimeException("User not found with username: " + username);
+    }
+    
+    public User2 getUserByEmail(String email) {
+        Optional<User2> user = userRepository.findByEmail(email);
+        if (user.isPresent()) {
+            return user.get();
+        }
+        throw new RuntimeException("User not found with email: " + email);
+    }
+    
+    public User2 authenticateUser(String username, String password) {
+        User2 user = getUserByUsername(username);
+        if (passwordEncoder.matches(password, user.getPassword())) {
+            // Reset failed attempts on successful login
+            user.setFailedAttempts(0);
+            userRepository.save(user);
+            return user;
+        } else {
+            // Increment failed attempts
+            user.setFailedAttempts(user.getFailedAttempts() + 1);
+            userRepository.save(user);
+            throw new RuntimeException("Invalid credentials");
+        }
+    }
+    
+    public boolean isEmployee(Integer userId) {
+        User2 user = getUserById(userId);
+        return "EMPLOYEE".equals(user.getUserType());
+    }
+    
+    public boolean isManager(Integer userId) {
+        User2 user = getUserById(userId);
+        return "MANAGER".equals(user.getUserType());
+    }
+    
+    public List<User2> getUsersByDepartment(String department) {
+        return userRepository.findByUserDepartment(department);
+    }
+    
+    public List<User2> getUsersByUserType(String userType) {
+        return userRepository.findByUserType(userType);
+    }
+    
+    public User2 createUser(User2 user) {
+        // Encode password before saving
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        return userRepository.save(user);
+    }
+    
+    public User2 updateUser(User2 user) {
+        return userRepository.save(user);
+    }
+    
+    public void deleteUser(Integer userId) {
+        userRepository.deleteById(userId);
+    }
+    
+    public boolean existsByUsername(String username) {
+        return userRepository.existsByUsername(username);
+    }
+    
+    public boolean existsByEmail(String email) {
+        return userRepository.existsByEmail(email);
+    }
+}
+```
+
+## Frontend Files
+
+### 1. Complete api.js
+
+```javascript
+// src/services/api.js
+const API_BASE_URL = 'http://localhost:8080/api';
+
+class ApiService {
+  getAuthToken() {
+    return localStorage.getItem('authToken');
+  }
+
+  getAuthHeaders() {
+    const token = this.getAuthToken();
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+  }
+
+  getCurrentUserId() {
+    return localStorage.getItem('userId') || localStorage.getItem('Id');
+  }
+
+  isAuthenticated() {
+    const token = this.getAuthToken();
+    const userId = this.getCurrentUserId();
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    
+    return (token && userId) || (isLoggedIn && userId);
+  }
+
+  async getUserAccounts(userId) {
+    const response = await fetch(`${API_BASE_URL}/accounts2/user/${userId}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+
+    return await response.json();
+  }
+
+  async getAccountData(accountId, userId) {
+    const response = await fetch(`${API_BASE_URL}/data2/account/${accountId}/user/${userId}/formatted`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+
+    return await response.json();
+  }
+
+  async getUserTransactions(userId) {
+    const response = await fetch(`${API_BASE_URL}/transactions2/user/${userId}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+
+    return await response.json();
+  }
+
+  async getTransactionPrintData(transactionId, userId) {
+    const response = await fetch(`${API_BASE_URL}/data2/transaction/${transactionId}/user/${userId}/print`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+
+    return await response.json();
+  }
+
+  // JWT Login method (for testing)
+  async loginJWT(email, password) {
+    const response = await fetch(`${API_BASE_URL}/auth2/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Login failed');
+    }
+
+    return await response.json();
+  }
+
+  logout() {
+    localStorage.clear();
+  }
+}
+
+export default new ApiService();
+```
+
+### 2. Complete AccountSelectionPage.js
+
+```javascript
+// src/components/AccountSelectionPage.js
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import ApiService from '../services/api';
+import 'bootstrap/dist/css/bootstrap.min.css';
+
+const AccountSelectionPage = () => {
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [userInfo, setUserInfo] = useState({});
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const isAuthenticated = ApiService.isAuthenticated();
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+
+    // Get user info from localStorage
+    setUserInfo({
+      fullName: localStorage.getItem('fullName') || localStorage.getItem('username') || 'User',
+      userType: localStorage.getItem('userType') || 'EMPLOYEE',
+      country: localStorage.getItem('country') || 'IN'
+    });
+
+    fetchUserAccounts();
+  }, [navigate]);
+
+  const fetchUserAccounts = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      const userId = ApiService.getCurrentUserId();
+      
+      if (!userId) {
+        setError('User not logged in properly. Please login again.');
+        navigate('/login');
+        return;
+      }
+
+      const userAccounts = await ApiService.getUserAccounts(parseInt(userId));
+      setAccounts(userAccounts);
+    } catch (error) {
+      setError(error.message);
+      
+      if (error.message.includes('401') || error.message.includes('Access denied')) {
+        localStorage.clear();
+        navigate('/login');
+        return;
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewStatement = async (account) => {
+    try {
+      const userId = ApiService.getCurrentUserId();
+      const accountData = await ApiService.getAccountData(account.accountId, parseInt(userId));
+      navigate('/statement', { state: { account: accountData } });
+    } catch (error) {
+      setError(error.message);
+      
+      if (error.message.includes('401')) {
+        localStorage.clear();
+        navigate('/login');
+      }
+    }
+  };
+
+  const handleViewTransactions = async (account) => {
+    try {
+      const userId = ApiService.getCurrentUserId();
+      const accountData = await ApiService.getAccountData(account.accountId, parseInt(userId));
+      navigate('/transactions', { state: { account: accountData } });
+    } catch (error) {
+      setError(error.message);
+      
+      if (error.message.includes('401')) {
+        localStorage.clear();
+        navigate('/login');
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="container mt-5 text-center">
+        <div className="spinner-border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+        <p className="mt-2">Loading your accounts...</p>
+      </div>
+    );
+  }
+
+  const getCurrencyDisplay = (country) => {
+    const currencies = {
+      'IN': 'INR', 'US': 'USD', 'UK': 'GBP', 'CA': 'CAD',
+      'AU': 'AUD', 'JP': 'JPY', 'FR': 'EUR', 'DE': 'EUR',
+      'AE': 'AED', 'SG': 'SGD'
+    };
+    return currencies[country] || 'INR';
+  };
+
+  return (
+    <div className="container mt-4">
+      {/* Header */}
+      <div className="row mb-4">
+        <div className="col-12">
+          <div className="bg-primary text-white p-4 rounded">
+            <h2>Welcome, {userInfo.fullName}</h2>
+            <p className="mb-0">
+              Role: {userInfo.userType} | Country: {userInfo.country} | Currency: {getCurrencyDisplay(userInfo.country)} |
+              <span className="badge bg-light text-primary ms-2">
+                {accounts.length} Account{accounts.length !== 1 ? 's' : ''}
+              </span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Currency Info */}
+      {userInfo.country !== 'IN' && (
+        <div className="alert alert-info mb-4">
+          <i className="fas fa-info-circle me-2"></i>
+          <strong>Currency Display:</strong> All amounts will be shown in your local currency ({getCurrencyDisplay(userInfo.country)}).
+        </div>
+      )}
+
+      {error && (
+        <div className="alert alert-danger">
+          {error}
+          {error.includes('Access denied') && (
+            <div className="mt-2">
+              Managers have different access privileges. Please contact your administrator.
+            </div>
+          )}
+        </div>
+      )}
+
+      {accounts.length === 0 && !loading && !error && (
+        <div className="alert alert-info">
+          No accounts found for your profile.
+        </div>
+      )}
+
+      {/* Accounts Grid */}
+      {accounts.length > 0 && (
+        <div className="row">
+          {accounts.map((account) => (
+            <div key={account.accountId} className="col-lg-6 col-xl-4 mb-4">
+              <div 
+                className="card h-100 shadow-sm border-0"
+                style={{ transition: 'transform 0.2s' }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-5px)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <div className="card-header bg-gradient text-white" 
+                     style={{ 
+                       background: account.accountType === 'Savings' 
+                         ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                         : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
+                     }}>
+                  <div className="d-flex justify-content-between align-items-center">
+                    <h6 className="mb-0">
+                      <i className={`fas fa-${account.accountType === 'Savings' ? 'piggy-bank' : 'briefcase'} me-2`}></i>
+                      {account.accountType} Account
+                    </h6>
+                    <span className="badge bg-light text-dark">{account.status}</span>
+                  </div>
+                </div>
+                <div className="card-body">
+                  <div className="mb-3">
+                    <h5 className="text-primary">{account.bankName}</h5>
+                    <p className="text-muted mb-0">
+                      Account: ****{account.accountNumber.slice(-4)}
+                    </p>
+                  </div>
+                  
+                  <div className="row text-center">
+                    <div className="col-12 mb-3">
+                      <div className="bg-light p-3 rounded">
+                        <small className="text-muted d-block">Current Balance</small>
+                        <h4 className="mb-0 text-success">
+                          ₹{account.currentBalance.toLocaleString('en-IN')}.00
+                        </h4>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="row text-center small text-muted">
+                    <div className="col-6">
+                      <i className="fas fa-building me-1"></i>
+                      {account.ifscCode}
+                    </div>
+                    <div className="col-6">
+                      <i className="fas fa-calendar me-1"></i>
+                      {account.status}
+                    </div>
+                  </div>
+                </div>
+                <div className="card-footer bg-transparent">
+                  <div className="d-flex gap-2">
+                    <button 
+                      className="btn btn-primary flex-fill"
+                      onClick={() => handleViewStatement(account)}
+                      disabled={account.status !== 'Active'}
+                    >
+                      View Statement
+                    </button>
+                    <button 
+                      className="btn btn-secondary flex-fill"
+                      onClick={() => handleViewTransactions(account)}
+                      disabled={account.status !== 'Active'}
+                    >
+                      View Transactions
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Quick Stats */}
+      {accounts.length > 0 && (
+        <div className="row mt-4">
+          <div className="col-12">
+            <div className="card border-0 shadow-sm">
+              <div className="card-header bg-light">
+                <h5 className="mb-0">
+                  <i className="fas fa-chart-pie me-2"></i>
+                  Quick Summary
+                </h5>
+              </div>
+              <div className="card-body">
+                <div className="row text-center">
+                  <div className="col-md-3">
+                    <div className="border-end">
+                      <h4 className="text-primary">{accounts.length}</h4>
+                      <small className="text-muted">Total Accounts</small>
+                    </div>
+                  </div>
+                  <div className="col-md-3">
+                    <div className="border-end">
+                      <h4 className="text-success">
+                        {accounts.filter(acc => acc.accountType === 'Savings').length}
+                      </h4>
+                      <small className="text-muted">Savings</small>
+                    </div>
+                  </div>
+                  <div className="col-md-3">
+                    <div className="border-end">
+                      <h4 className="text-info">
+                        {accounts.filter(acc => acc.accountType === 'Current').length}
+                      </h4>
+                      <small className="text-muted">Current</small>
+                    </div>
+                  </div>
+                  <div className="col-md-3">
+                    <h4 className="text-warning">
+                      ₹{accounts.reduce((sum, acc) => sum + acc.currentBalance, 0).toLocaleString('en-IN')}
+                    </h4>
+                    <small className="text-muted">Total Balance</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="row mt-4">
+        <div className="col-12">
+          <button className="btn btn-outline-primary me-2" onClick={fetchUserAccounts}>
+            <i className="fas fa-sync-alt me-2"></i>
+            Refresh Accounts
+          </button>
+          <button className="btn btn-outline-danger" onClick={() => {
+            ApiService.logout();
+            navigate('/login');
+          }}>
+            <i className="fas fa-sign-out-alt me-2"></i>
+            Logout
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AccountSelectionPage;
+```
+
+## Database Credentials for Testing
+
+Use these credentials:
+- **Email:** `john@example.com` **Password:** `password` (US Employee)
+- **Email:** `jane@example.com` **Password:** `password` (UK Employee)
+- **Email:** `bob@example.com` **Password:** `password` (IN Manager)
+- **Email:** `alice@example.com` **Password:** `password` (CA Employee)
+- **Email:** `david@example.com` **Password:** `password` (AU Employee)
+
+## Testing Instructions
+
+1. Start your Spring Boot backend
+2. Your teammate can now login using email + password
+3. After login, they should store the JWT response data
+4. Your banking components will work automatically
+
+The system now supports both email-based login and maintains compatibility with existing auth systems.
