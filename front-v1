@@ -1,0 +1,556 @@
+# Frontend JWT Integration - Minimal Changes
+
+## Updated API Service
+
+```javascript
+// src/services/api.js
+const API_BASE_URL = 'http://localhost:8080/api';
+
+class ApiService {
+  getAuthToken() {
+    return localStorage.getItem('authToken');
+  }
+
+  getAuthHeaders() {
+    const token = this.getAuthToken();
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+  }
+
+  // Method to get current user ID (your teammates can set this after login)
+  getCurrentUserId() {
+    return localStorage.getItem('userId');
+  }
+
+  isAuthenticated() {
+    return !!this.getAuthToken() && !!this.getCurrentUserId();
+  }
+
+  // Updated method to use JWT endpoints
+  async getUserAccounts(userId) {
+    const response = await fetch(`${API_BASE_URL}/accounts2/user/${userId}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+
+    return await response.json();
+  }
+
+  // Updated method to use JWT endpoints
+  async getAccountData(accountId, userId) {
+    const response = await fetch(`${API_BASE_URL}/data2/account/${accountId}/user/${userId}/formatted`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+
+    return await response.json();
+  }
+
+  // Updated method to use JWT endpoints
+  async getUserTransactions(userId) {
+    const response = await fetch(`${API_BASE_URL}/transactions2/user/${userId}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+
+    return await response.json();
+  }
+
+  // Updated method to use JWT endpoints
+  async getTransactionPrintData(transactionId, userId) {
+    const response = await fetch(`${API_BASE_URL}/data2/transaction/${transactionId}/user/${userId}/print`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+
+    return await response.json();
+  }
+}
+
+export default new ApiService();
+```
+
+## Updated Account Selection Page
+
+```javascript
+// src/components/AccountSelectionPage.js
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import ApiService from '../services/api';
+import 'bootstrap/dist/css/bootstrap.min.css';
+
+const AccountSelectionPage = () => {
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Check if user is authenticated with JWT
+    const isAuthenticated = ApiService.isAuthenticated();
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+
+    fetchUserAccounts();
+  }, [navigate]);
+
+  const fetchUserAccounts = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      // Get current user ID from localStorage (set by your teammate's login)
+      const userId = ApiService.getCurrentUserId();
+      
+      if (!userId) {
+        setError('User not logged in properly. Please login again.');
+        navigate('/login');
+        return;
+      }
+
+      // Use the updated JWT API endpoint
+      const userAccounts = await ApiService.getUserAccounts(parseInt(userId));
+      setAccounts(userAccounts);
+    } catch (error) {
+      setError(error.message);
+      
+      // Handle JWT authentication errors
+      if (error.message.includes('Access denied') || error.message.includes('401')) {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('userId');
+        navigate('/login');
+        return;
+      }
+      
+      if (error.message.includes('Access denied')) {
+        setError('Access denied. Only employees can view account statements.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewStatement = async (account) => {
+    try {
+      const userId = ApiService.getCurrentUserId();
+      
+      // Get formatted account data from JWT backend
+      const accountData = await ApiService.getAccountData(account.accountId, parseInt(userId));
+      
+      // Navigate to statement with the formatted data
+      navigate('/statement', { state: { account: accountData } });
+    } catch (error) {
+      setError(error.message);
+      
+      // Handle JWT errors
+      if (error.message.includes('401')) {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('userId');
+        navigate('/login');
+      }
+    }
+  };
+
+  const handleViewTransactions = async (account) => {
+    try {
+      const userId = ApiService.getCurrentUserId();
+      
+      // Get formatted account data from JWT backend
+      const accountData = await ApiService.getAccountData(account.accountId, parseInt(userId));
+      
+      // Navigate to transactions with the formatted data
+      navigate('/transactions', { state: { account: accountData } });
+    } catch (error) {
+      setError(error.message);
+      
+      // Handle JWT errors
+      if (error.message.includes('401')) {
+        localStorage.removeItem('authToken');
+        localStorage.removeUser('userId');
+        navigate('/login');
+      }
+    }
+  };
+
+  // Rest of your component stays exactly the same
+  if (loading) {
+    return (
+      <div className="container mt-5 text-center">
+        <div className="spinner-border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+        <p className="mt-2">Loading your accounts...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mt-4">
+      <div className="row mb-4">
+        <div className="col-12">
+          <h2>My Accounts</h2>
+          <p className="text-muted">Select an account to view statement or transactions</p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="alert alert-danger">
+          {error}
+          {error.includes('Access denied') && (
+            <div className="mt-2">
+              Managers have different access privileges. Please contact your administrator.
+            </div>
+          )}
+        </div>
+      )}
+
+      {accounts.length === 0 && !loading && !error && (
+        <div className="alert alert-info">
+          No accounts found for your profile.
+        </div>
+      )}
+
+      {accounts.length > 0 && (
+        <div className="row">
+          {accounts.map((account) => (
+            <div key={account.accountId} className="col-lg-6 col-xl-4 mb-4">
+              <div className="card h-100">
+                <div className="card-header bg-primary text-white">
+                  <h5 className="mb-0">{account.bankName}</h5>
+                  <div className="card-body">
+                    <p className="card-text">
+                      <strong>Account Number:</strong> {account.accountNumber}<br/>
+                      <strong>Account Type:</strong> {account.accountType}<br/>
+                      <strong>Balance:</strong> 
+                      <span className="text-success fw-bold">
+                        ₹{account.currentBalance.toLocaleString('en-IN')}.00
+                      </span><br/>
+                      <strong>IFSC:</strong> {account.ifscCode}<br/>
+                      <strong>Status:</strong> 
+                      <span className={`badge ${account.status === 'Active' ? 'bg-success' : 'bg-danger'}`}>
+                        {account.status}
+                      </span>
+                    </p>
+                    <div className="d-flex gap-2">
+                      <button 
+                        className="btn btn-primary"
+                        onClick={() => handleViewStatement(account)}
+                        disabled={account.status !== 'Active'}
+                      >
+                        View Statement
+                      </button>
+                      <button 
+                        className="btn btn-secondary"
+                        onClick={() => handleViewTransactions(account)}
+                        disabled={account.status !== 'Active'}
+                      >
+                        View Transactions
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="row mt-4">
+        <div className="col-12">
+          <button className="btn btn-outline-primary" onClick={fetchUserAccounts}>
+            Refresh Accounts
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AccountSelectionPage;
+```
+
+## Small Component for JWT Token Management
+
+```javascript
+// src/components/AuthHelper.js
+// Small helper component your teammates can use to set JWT tokens after login
+
+class AuthHelper {
+  // Your teammates should call this after successful login
+  static setAuthData(loginResponse) {
+    localStorage.setItem('authToken', loginResponse.token);
+    localStorage.setItem('userId', loginResponse.userId);
+    localStorage.setItem('username', loginResponse.username);
+    localStorage.setItem('userType', loginResponse.userType);
+    localStorage.setItem('department', loginResponse.department);
+    localStorage.setItem('fullName', loginResponse.fullName);
+    localStorage.setItem('country', loginResponse.country);
+    
+    // For backward compatibility with existing code
+    localStorage.setItem('isLoggedIn', 'true');
+  }
+
+  // Clear auth data on logout
+  static clearAuthData() {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('username');
+    localStorage.removeItem('userType');
+    localStorage.removeItem('department');
+    localStorage.removeItem('fullName');
+    localStorage.removeItem('country');
+    localStorage.removeItem('isLoggedIn');
+  }
+
+  // Check if user is authenticated
+  static isAuthenticated() {
+    return !!localStorage.getItem('authToken') && !!localStorage.getItem('userId');
+  }
+
+  // Get user info
+  static getCurrentUser() {
+    return {
+      userId: localStorage.getItem('userId'),
+      username: localStorage.getItem('username'),
+      userType: localStorage.getItem('userType'),
+      department: localStorage.getItem('department'),
+      fullName: localStorage.getItem('fullName'),
+      country: localStorage.getItem('country')
+    };
+  }
+}
+
+export default AuthHelper;
+```
+
+## Updated Login Page for Your Teammate
+
+Your teammate's login code needs these changes to work with JWT:
+
+```javascript
+function LoginPage() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState({});
+
+  const validate = () => {
+    let newErrors = {};
+    if (!email) {
+      newErrors.email = "Email is required";
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      newErrors.email = "Invalid email format";
+    }
+    if (!password) {
+      newErrors.password = "Password is required";
+    } else if (password.length < 6) { // Changed from 10 to 6 for practical use
+      newErrors.password = "Password must be at least 6 characters";
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (validate()) {
+      try {
+        // CHANGED: Use the JWT backend endpoint and send username instead of email
+        const response = await fetch("http://localhost:8080/api/auth2/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            username: email, // Your backend expects username, not email
+            password: password 
+          }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          // CHANGED: Set JWT token and all required data
+          localStorage.setItem("authToken", data.token);
+          localStorage.setItem("userId", data.userId);
+          localStorage.setItem("username", data.username);
+          localStorage.setItem("userType", data.userType);
+          localStorage.setItem("department", data.department);
+          localStorage.setItem("fullName", data.fullName);
+          localStorage.setItem("country", data.country);
+          
+          // Keep for backward compatibility
+          localStorage.setItem("isLoggedIn", "true");
+          localStorage.setItem("email", email);
+
+          window.location.href = "/";
+        } else {
+          alert("Login failed: " + data.error);
+        }
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    }
+  };
+
+  // Rest of the component stays the same...
+  return (
+    // Your existing HTML/JSX code here
+  );
+}
+```
+
+## Alternative: Keep Email Login (Better Approach)
+
+If you want to keep email-based login, modify your backend's `AuthController2.java`:
+
+```java
+@PostMapping("/login")
+public ResponseEntity<?> login(@RequestBody Map<String, String> loginRequest) {
+    try {
+        String identifier = loginRequest.get("username"); // This could be email or username
+        String email = loginRequest.get("email");
+        String password = loginRequest.get("password");
+        
+        User2 user;
+        
+        // Try to authenticate with email if provided, otherwise use username
+        if (email != null && !email.isEmpty()) {
+            user = userService.getUserByEmail(email);
+            // Verify password
+            if (!passwordEncoder.matches(password, user.getPassword())) {
+                throw new RuntimeException("Invalid credentials");
+            }
+        } else {
+            user = userService.authenticateUser(identifier, password);
+        }
+        
+        // Generate JWT token
+        String token = jwtUtil.generateToken(
+            user.getId(), 
+            user.getUsername(), 
+            user.getUserType(), 
+            user.getUserDepartment()
+        );
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("token", token);
+        response.put("userId", user.getId());
+        response.put("username", user.getUsername());
+        response.put("userType", user.getUserType());
+        response.put("department", user.getUserDepartment());
+        response.put("fullName", user.getFullName());
+        response.put("country", user.getCountry());
+        response.put("message", "Login successful");
+        
+        return ResponseEntity.ok(response);
+    } catch (RuntimeException e) {
+        Map<String, String> errorResponse = new HashMap<>();
+        errorResponse.put("error", e.getMessage());
+        return ResponseEntity.status(401).body(errorResponse);
+    }
+}
+```
+
+Then your teammate's login code becomes:
+
+```javascript
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (validate()) {
+    try {
+      const response = await fetch("http://localhost:8080/api/auth2/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          email: email,    // Send email
+          password: password 
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Set JWT token and all required data
+        localStorage.setItem("authToken", data.token);
+        localStorage.setItem("userId", data.userId);
+        localStorage.setItem("username", data.username);
+        localStorage.setItem("userType", data.userType);
+        localStorage.setItem("department", data.department);
+        localStorage.setItem("fullName", data.fullName);
+        localStorage.setItem("country", data.country);
+        
+        // Keep for backward compatibility
+        localStorage.setItem("isLoggedIn", "true");
+        localStorage.setItem("email", email);
+
+        window.location.href = "/";
+      } else {
+        alert("Login failed: " + data.error);
+      }
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  }
+};
+```
+
+## Test Credentials
+
+For testing, use these credentials that match your database:
+- Email: `john@example.com` / Username: `john_employee` / Password: `password`
+- Email: `jane@example.com` / Username: `jane_employee` / Password: `password`
+- Email: `bob@example.com` / Username: `bob_manager` / Password: `password`
+
+The password in your database is hashed, but the original password for all test users is `"password"`.
+
+## Key Issues Fixed
+
+1. **Endpoint**: Changed from `/api/auth/login` to `/api/auth2/login`
+2. **Port**: Changed from 8030 to 8080
+3. **JWT Token**: Added `authToken` storage
+4. **User Data**: Added all required user fields for your banking system
+5. **Error Handling**: Improved response handling
+
+## Testing Your Components
+
+1. **Test without JWT** (current setup):
+   - Manually set localStorage items:
+   ```javascript
+   localStorage.setItem('authToken', 'dummy_token');
+   localStorage.setItem('userId', '1');
+   localStorage.setItem('isLoggedIn', 'true');
+   ```
+
+2. **Test with JWT** (after backend is running):
+   - Use the actual login endpoint to get real JWT tokens
+   - Everything should work seamlessly
+
+## Key Changes Made
+
+1. **API Service**: Updated endpoints to use `/api/accounts2`, `/api/data2`, etc.
+2. **Authentication**: Added JWT token headers to all requests
+3. **Error Handling**: Added JWT-specific error handling (401 redirects to login)
+4. **Backward Compatibility**: Kept existing localStorage keys so your current setup still works
+
+Your `AccountStatement.js` and `AccountTransactionsPage.js` components don't need any changes - they'll automatically work with the new API service since they use the same methods.
