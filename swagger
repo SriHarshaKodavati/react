@@ -1,0 +1,25 @@
+@Bean
+public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    http.cors().and().csrf().disable()
+        .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+        .and()
+        .authorizeHttpRequests(authz -> authz
+            .requestMatchers("/api/auth2/**").permitAll() // Allow authentication endpoints
+            
+            // Add Swagger endpoints
+            .requestMatchers("/swagger-ui/**").permitAll()
+            .requestMatchers("/swagger-ui.html").permitAll() 
+            .requestMatchers("/v3/api-docs/**").permitAll()
+            .requestMatchers("/swagger-resources/**").permitAll()
+            .requestMatchers("/webjars/**").permitAll()
+            
+            .requestMatchers("/api/accounts2/**").authenticated() // Require authentication for accounts
+            .requestMatchers("/api/transactions2/**").authenticated() // Require authentication for transactions
+            .requestMatchers("/api/data2/**").authenticated() // Require authentication for formatted data
+            .requestMatchers("/api/users2/**").authenticated() // Require authentication for users
+            .anyRequest().authenticated()
+        )
+        .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+    
+    return http.build();
+}
