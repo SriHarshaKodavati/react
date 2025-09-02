@@ -1,0 +1,145 @@
+package com.simplebanking.controller;
+
+import com.simplebanking.model.User2;
+import com.simplebanking.service.UserService2;
+import com.simplebanking.security.JwtUtil2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import java.util.HashMap;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/auth2")
+@CrossOrigin(origins = "http://localhost:3000")
+public class AuthController2 {
+    
+    @Autowired
+    private UserService2 userService;
+    
+    @Autowired
+    private JwtUtil2 jwtUtil;
+    
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+    
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestBody Map<String, String> loginRequest) {
+        try {
+            String username = loginRequest.get("username");
+            String email = loginRequest.get("email");
+            String password = loginRequest.get("password");
+            
+            User2 user;
+            
+            // Support both email and username login
+            if (email != null && !email.isEmpty()) {
+                // Login with email
+                user = userService.getUserByEmail(email);
+                if (!passwordEncoder.matches(password, user.getPassword())) {
+                    user.setFailedAttempts(user.getFailedAttempts() + 1);
+                    userService.updateUser(user);
+                    throw new RuntimeException("Invalid credentials");
+                }
+                // Reset failed attempts on successful login
+                user.setFailedAttempts(0);
+                userService.updateUser(user);
+            } else if (username != null && !username.isEmpty()) {
+                // Login with username (uses existing authenticate method)
+                user = userService.authenticateUser(username, password);
+            } else {
+                throw new RuntimeException("Email or username is required");
+            }
+            
+            // Generate JWT token
+            String token = jwtUtil.generateToken(
+                user.getId(), 
+                user.getUsername(), 
+                user.getUserType(), 
+                user.getUserDepartment()
+            );
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("token", token);
+            response.put("userId", user.getId());
+            response.put("username", user.getUsername());
+            response.put("userType", user.getUserType());
+            response.put("department", user.getUserDepartment());
+            response.put("fullName", user.getFullName());
+            response.put("country", user.getCountry());
+            response.put("email", user.getEmail());
+            response.put("message", "Login successful");
+            
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.status(401).body(errorResponse);
+        }
+    }
+    
+    @PostMapping("/register")
+    public ResponseEntity<?> register(@RequestBody User2 user) {
+        try {
+            // Check if username or email already exists
+            if (userService.existsByUsername(user.getUsername())) {
+                throw new RuntimeException("Username already exists");
+            }
+            if (userService.existsByEmail(user.getEmail())) {
+                throw new RuntimeException("Email already exists");
+            }
+            
+            // Set default values
+            user.setFailedAttempts(0);
+            user.setStatus("Active");
+            if (user.getCountry() == null) {
+                user.setCountry("IN");
+            }
+            if (user.getUserType() == null) {
+                user.setUserType("EMPLOYEE");
+            }
+            if (user.getUserDepartment() == null) {
+                user.setUserDepartment("Technology");
+            }
+            
+            User2 createdUser = userService.createUser(user);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "User registered successfully");
+            response.put("userId", createdUser.getId());
+            response.put("username", createdUser.getUsername());
+            response.put("email", createdUser.getEmail());
+            
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.status(400).body(errorResponse);
+        }
+    }
+    
+    @PostMapping("/validate")
+    public ResponseEntity<?> validateToken(@RequestHeader("Authorization") String authHeader) {
+        try {
+            String token = authHeader.substring(7); // Remove "Bearer " prefix
+            
+            if (jwtUtil.validateToken(token) && !jwtUtil.isTokenExpired(token)) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("valid", true);
+                response.put("userId", jwtUtil.getUserIdFromToken(token));
+                response.put("username", jwtUtil.getUsernameFromToken(token));
+                response.put("userType", jwtUtil.getUserTypeFromToken(token));
+                response.put("department", jwtUtil.getDepartmentFromToken(token));
+                
+                return ResponseEntity.ok(response);
+            } else {
+                throw new RuntimeException("Invalid or expired token");
+            }
+        } catch (Exception e) {
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Invalid token");
+            return ResponseEntity.status(401).body(errorResponse);
+        }
+    }
+}
