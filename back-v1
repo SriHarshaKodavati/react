@@ -1,0 +1,2458 @@
+# Complete JWT Banking System - Updated Structure
+
+## Database Schema
+
+```sql
+-- Create database
+CREATE DATABASE simple_banking;
+\c simple_banking;
+
+-- Updated users2 table with new fields
+CREATE TABLE users2 (
+    id INTEGER PRIMARY KEY,
+    country VARCHAR(3) DEFAULT 'IN',
+    email VARCHAR(100) UNIQUE,
+    failed_attempts INTEGER DEFAULT 0,
+    first_name VARCHAR(50),
+    last_name VARCHAR(50),
+    password VARCHAR(255),
+    phone VARCHAR(15),
+    status VARCHAR(20) DEFAULT 'Active',
+    user_department VARCHAR(50),
+    user_type VARCHAR(20), -- EMPLOYEE or MANAGER
+    username VARCHAR(50) UNIQUE
+);
+
+-- Create accounts2 table
+CREATE TABLE accounts2 (
+    account_id INTEGER PRIMARY KEY,
+    user_id INTEGER REFERENCES users2(id),
+    account_number VARCHAR(20),
+    account_type VARCHAR(20),
+    current_balance DECIMAL(15,2),
+    bank_name VARCHAR(100),
+    ifsc_code VARCHAR(15),
+    status VARCHAR(20)
+);
+
+-- Create transactions2 table
+CREATE TABLE transactions2 (
+    transaction_id INTEGER PRIMARY KEY,
+    account_id INTEGER REFERENCES accounts2(account_id),
+    transaction_date DATE,
+    description VARCHAR(255),
+    transaction_type VARCHAR(10),
+    amount DECIMAL(15,2),
+    balance_after DECIMAL(15,2),
+    reference_number VARCHAR(50)
+);
+
+-- Insert sample users with new structure
+INSERT INTO users2 (id, country, email, failed_attempts, first_name, last_name, password, phone, status, user_department, user_type, username) VALUES
+(1, 'US', 'john@example.com', 0, 'John', 'Doe', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '9876543210', 'Active', 'Technology', 'EMPLOYEE', 'john_employee'),
+(2, 'UK', 'jane@example.com', 0, 'Jane', 'Smith', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '9876543211', 'Active', 'Finance', 'EMPLOYEE', 'jane_employee'),
+(3, 'IN', 'bob@example.com', 0, 'Bob', 'Wilson', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '9876543212', 'Active', 'Management', 'MANAGER', 'bob_manager'),
+(4, 'CA', 'alice@example.com', 0, 'Alice', 'Johnson', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '9876543213', 'Active', 'Technology', 'EMPLOYEE', 'alice_employee'),
+(5, 'AU', 'david@example.com', 0, 'David', 'Smith', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '9876543214', 'Active', 'Functions', 'EMPLOYEE', 'david_employee');
+
+-- Insert sample accounts
+INSERT INTO accounts2 (account_id, user_id, account_number, account_type, current_balance, bank_name, ifsc_code, status) VALUES
+(101, 1, '1001234567', 'Savings', 50000.00, 'ABC Bank', 'ABC0001234', 'Active'),
+(102, 1, '1001234568', 'Current', 25000.00, 'ABC Bank', 'ABC0001234', 'Active'),
+(103, 2, '2001234567', 'Savings', 75000.00, 'XYZ Bank', 'XYZ0001234', 'Active'),
+(104, 4, '4001234567', 'Savings', 35000.00, 'DEF Bank', 'DEF0001234', 'Active'),
+(105, 5, '5001234567', 'Current', 45000.00, 'GHI Bank', 'GHI0001234', 'Active');
+
+-- Insert sample transactions
+INSERT INTO transactions2 (transaction_id, account_id, transaction_date, description, transaction_type, amount, balance_after, reference_number) VALUES
+(1, 101, '2025-08-01', 'Salary Credit', 'Credit', 30000.00, 50000.00, 'TXN001'),
+(2, 101, '2025-08-02', 'Online Purchase', 'Debit', 5000.00, 45000.00, 'TXN002'),
+(3, 101, '2025-08-03', 'ATM Withdrawal', 'Debit', 2000.00, 43000.00, 'TXN003'),
+(4, 102, '2025-08-01', 'Transfer In', 'Credit', 25000.00, 25000.00, 'TXN004'),
+(5, 103, '2025-08-01', 'Salary Credit', 'Credit', 40000.00, 75000.00, 'TXN005'),
+(6, 103, '2025-08-02', 'Grocery Shopping', 'Debit', 3000.00, 72000.00, 'TXN006'),
+(7, 104, '2025-08-01', 'Bonus Credit', 'Credit', 15000.00, 35000.00, 'TXN007'),
+(8, 104, '2025-08-02', 'Bill Payment', 'Debit', 2000.00, 33000.00, 'TXN008'),
+(9, 105, '2025-08-01', 'Project Payment', 'Credit', 20000.00, 45000.00, 'TXN009'),
+(10, 105, '2025-08-02', 'Equipment Purchase', 'Debit', 5000.00, 40000.00, 'TXN010');
+```
+
+## Backend Implementation
+
+### Step 1: pom.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.1.0</version>
+        <relativePath/>
+    </parent>
+    <groupId>com.simplebanking</groupId>
+    <artifactId>user-banking-v2</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>user-banking-v2</name>
+    <description>Simple User Banking System V2</description>
+
+    <properties>
+        <java.version>17</java.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- JWT Dependencies -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.11.5</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+```
+
+### Step 2: application.properties
+
+```properties
+# Database Configuration
+spring.datasource.url=jdbc:postgresql://localhost:5432/simple_banking
+spring.datasource.username=your_username
+spring.datasource.password=your_password
+spring.datasource.driver-class-name=org.postgresql.Driver
+
+# JPA Configuration
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+
+# JWT Configuration
+jwt.secret=mySecretKey123456789012345678901234567890123456
+jwt.expiration=86400000
+
+# Server Configuration
+server.port=8080
+```
+
+### Step 3: Model Classes
+
+#### User2.java
+```java
+package com.simplebanking.model;
+
+import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+@Entity
+@Table(name = "users2")
+public class User2 {
+    @Id
+    private Integer id;
+    private String country;
+    private String email;
+    
+    @Column(name = "failed_attempts")
+    private Integer failedAttempts;
+    
+    @Column(name = "first_name")
+    private String firstName;
+    
+    @Column(name = "last_name")
+    private String lastName;
+    
+    @JsonIgnore
+    private String password;
+    
+    private String phone;
+    private String status;
+    
+    @Column(name = "user_department")
+    private String userDepartment;
+    
+    @Column(name = "user_type")
+    private String userType;
+    
+    private String username;
+    
+    // Constructors
+    public User2() {}
+    
+    public User2(Integer id, String country, String email, Integer failedAttempts,
+                 String firstName, String lastName, String password, String phone,
+                 String status, String userDepartment, String userType, String username) {
+        this.id = id;
+        this.country = country;
+        this.email = email;
+        this.failedAttempts = failedAttempts;
+        this.firstName = firstName;
+        this.lastName = lastName;
+        this.password = password;
+        this.phone = phone;
+        this.status = status;
+        this.userDepartment = userDepartment;
+        this.userType = userType;
+        this.username = username;
+    }
+    
+    // Getters and Setters
+    public Integer getId() { return id; }
+    public void setId(Integer id) { this.id = id; }
+    
+    public String getCountry() { return country; }
+    public void setCountry(String country) { this.country = country; }
+    
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+    
+    public Integer getFailedAttempts() { return failedAttempts; }
+    public void setFailedAttempts(Integer failedAttempts) { this.failedAttempts = failedAttempts; }
+    
+    public String getFirstName() { return firstName; }
+    public void setFirstName(String firstName) { this.firstName = firstName; }
+    
+    public String getLastName() { return lastName; }
+    public void setLastName(String lastName) { this.lastName = lastName; }
+    
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
+    
+    public String getPhone() { return phone; }
+    public void setPhone(String phone) { this.phone = phone; }
+    
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    
+    public String getUserDepartment() { return userDepartment; }
+    public void setUserDepartment(String userDepartment) { this.userDepartment = userDepartment; }
+    
+    public String getUserType() { return userType; }
+    public void setUserType(String userType) { this.userType = userType; }
+    
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
+    
+    // Helper method to get full name
+    public String getFullName() {
+        return firstName + " " + lastName;
+    }
+}
+```
+
+#### Account2.java
+```java
+package com.simplebanking.model;
+
+import jakarta.persistence.*;
+import java.math.BigDecimal;
+
+@Entity
+@Table(name = "accounts2")
+public class Account2 {
+    @Id
+    @Column(name = "account_id")
+    private Integer accountId;
+    
+    @Column(name = "user_id")
+    private Integer userId;
+    
+    @Column(name = "account_number")
+    private String accountNumber;
+    
+    @Column(name = "account_type")
+    private String accountType;
+    
+    @Column(name = "current_balance")
+    private BigDecimal currentBalance;
+    
+    @Column(name = "bank_name")
+    private String bankName;
+    
+    @Column(name = "ifsc_code")
+    private String ifscCode;
+    
+    private String status;
+    
+    // Constructors
+    public Account2() {}
+    
+    public Account2(Integer accountId, Integer userId, String accountNumber, 
+                   String accountType, BigDecimal currentBalance, String bankName, 
+                   String ifscCode, String status) {
+        this.accountId = accountId;
+        this.userId = userId;
+        this.accountNumber = accountNumber;
+        this.accountType = accountType;
+        this.currentBalance = currentBalance;
+        this.bankName = bankName;
+        this.ifscCode = ifscCode;
+        this.status = status;
+    }
+    
+    // Getters and Setters
+    public Integer getAccountId() { return accountId; }
+    public void setAccountId(Integer accountId) { this.accountId = accountId; }
+    
+    public Integer getUserId() { return userId; }
+    public void setUserId(Integer userId) { this.userId = userId; }
+    
+    public String getAccountNumber() { return accountNumber; }
+    public void setAccountNumber(String accountNumber) { this.accountNumber = accountNumber; }
+    
+    public String getAccountType() { return accountType; }
+    public void setAccountType(String accountType) { this.accountType = accountType; }
+    
+    public BigDecimal getCurrentBalance() { return currentBalance; }
+    public void setCurrentBalance(BigDecimal currentBalance) { this.currentBalance = currentBalance; }
+    
+    public String getBankName() { return bankName; }
+    public void setBankName(String bankName) { this.bankName = bankName; }
+    
+    public String getIfscCode() { return ifscCode; }
+    public void setIfscCode(String ifscCode) { this.ifscCode = ifscCode; }
+    
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+}
+```
+
+#### Transaction2.java
+```java
+package com.simplebanking.model;
+
+import jakarta.persistence.*;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+@Entity
+@Table(name = "transactions2")
+public class Transaction2 {
+    @Id
+    @Column(name = "transaction_id")
+    private Integer transactionId;
+    
+    @Column(name = "account_id")
+    private Integer accountId;
+    
+    @Column(name = "transaction_date")
+    private LocalDate transactionDate;
+    
+    private String description;
+    
+    @Column(name = "transaction_type")
+    private String transactionType;
+    
+    private BigDecimal amount;
+    
+    @Column(name = "balance_after")
+    private BigDecimal balanceAfter;
+    
+    @Column(name = "reference_number")
+    private String referenceNumber;
+    
+    // Constructors
+    public Transaction2() {}
+    
+    public Transaction2(Integer transactionId, Integer accountId, LocalDate transactionDate,
+                      String description, String transactionType, BigDecimal amount,
+                      BigDecimal balanceAfter, String referenceNumber) {
+        this.transactionId = transactionId;
+        this.accountId = accountId;
+        this.transactionDate = transactionDate;
+        this.description = description;
+        this.transactionType = transactionType;
+        this.amount = amount;
+        this.balanceAfter = balanceAfter;
+        this.referenceNumber = referenceNumber;
+    }
+    
+    // Getters and Setters
+    public Integer getTransactionId() { return transactionId; }
+    public void setTransactionId(Integer transactionId) { this.transactionId = transactionId; }
+    
+    public Integer getAccountId() { return accountId; }
+    public void setAccountId(Integer accountId) { this.accountId = accountId; }
+    
+    public LocalDate getTransactionDate() { return transactionDate; }
+    public void setTransactionDate(LocalDate transactionDate) { this.transactionDate = transactionDate; }
+    
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+    
+    public String getTransactionType() { return transactionType; }
+    public void setTransactionType(String transactionType) { this.transactionType = transactionType; }
+    
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal amount) { this.amount = amount; }
+    
+    public BigDecimal getBalanceAfter() { return balanceAfter; }
+    public void setBalanceAfter(BigDecimal balanceAfter) { this.balanceAfter = balanceAfter; }
+    
+    public String getReferenceNumber() { return referenceNumber; }
+    public void setReferenceNumber(String referenceNumber) { this.referenceNumber = referenceNumber; }
+}
+```
+
+### Step 4: Repository Classes
+
+#### UserRepository2.java
+```java
+package com.simplebanking.repository;
+
+import com.simplebanking.model.User2;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+import java.util.Optional;
+import java.util.List;
+
+@Repository
+public interface UserRepository2 extends JpaRepository<User2, Integer> {
+    Optional<User2> findByUsername(String username);
+    Optional<User2> findByEmail(String email);
+    boolean existsByUsername(String username);
+    boolean existsByEmail(String email);
+    
+    // Find users by user type (role)
+    List<User2> findByUserType(String userType);
+    
+    // Find active users by user type
+    List<User2> findByUserTypeAndStatus(String userType, String status);
+    
+    // Find users by department
+    List<User2> findByUserDepartment(String department);
+}
+```
+
+#### AccountRepository2.java
+```java
+package com.simplebanking.repository;
+
+import com.simplebanking.model.Account2;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface AccountRepository2 extends JpaRepository<Account2, Integer> {
+    List<Account2> findByUserId(Integer userId);
+    Optional<Account2> findByAccountNumber(String accountNumber);
+    List<Account2> findByUserIdAndStatus(Integer userId, String status);
+    List<Account2> findByStatus(String status);
+}
+```
+
+#### TransactionRepository2.java
+```java
+package com.simplebanking.repository;
+
+import com.simplebanking.model.Transaction2;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+import java.util.List;
+
+@Repository
+public interface TransactionRepository2 extends JpaRepository<Transaction2, Integer> {
+    List<Transaction2> findByAccountId(Integer accountId);
+    
+    @Query("SELECT t FROM Transaction2 t WHERE t.accountId IN (SELECT a.accountId FROM Account2 a WHERE a.userId = ?1) ORDER BY t.transactionDate DESC")
+    List<Transaction2> findByUserId(Integer userId);
+    
+    @Query("SELECT t FROM Transaction2 t WHERE t.accountId = ?1 ORDER BY t.transactionDate DESC LIMIT 10")
+    List<Transaction2> findRecentTransactionsByAccountId(Integer accountId);
+}
+```
+
+### Step 5: Security Classes
+
+#### JwtUtil2.java
+```java
+package com.simplebanking.security;
+
+import io.jsonwebtoken.*;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+import java.security.Key;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+
+@Component
+public class JwtUtil2 {
+    
+    @Value("${jwt.secret:mySecretKey123456789012345678901234567890123456}")
+    private String secret;
+    
+    @Value("${jwt.expiration:86400000}") // 24 hours
+    private Long expiration;
+    
+    private Key getSigningKey() {
+        return Keys.hmacShaKeyFor(secret.getBytes());
+    }
+    
+    public String generateToken(Integer userId, String username, String userType, String department) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId);
+        claims.put("username", username);
+        claims.put("userType", userType);
+        claims.put("department", department);
+        return createToken(claims, username);
+    }
+    
+    private String createToken(Map<String, Object> claims, String subject) {
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(subject)
+                .setIssuedAt(new Date(System.currentTimeMillis()))
+                .setExpiration(new Date(System.currentTimeMillis() + expiration))
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+    
+    public Boolean validateToken(String token) {
+        try {
+            Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token);
+            return true;
+        } catch (JwtException | IllegalArgumentException e) {
+            return false;
+        }
+    }
+    
+    public Integer getUserIdFromToken(String token) {
+        Claims claims = Jwts.parserBuilder().setSigningKey(getSigningKey()).build()
+                .parseClaimsJws(token).getBody();
+        return (Integer) claims.get("userId");
+    }
+    
+    public String getUsernameFromToken(String token) {
+        Claims claims = Jwts.parserBuilder().setSigningKey(getSigningKey()).build()
+                .parseClaimsJws(token).getBody();
+        return claims.getSubject();
+    }
+    
+    public String getUserTypeFromToken(String token) {
+        Claims claims = Jwts.parserBuilder().setSigningKey(getSigningKey()).build()
+                .parseClaimsJws(token).getBody();
+        return (String) claims.get("userType");
+    }
+    
+    public String getDepartmentFromToken(String token) {
+        Claims claims = Jwts.parserBuilder().setSigningKey(getSigningKey()).build()
+                .parseClaimsJws(token).getBody();
+        return (String) claims.get("department");
+    }
+    
+    public Boolean isTokenExpired(String token) {
+        try {
+            Claims claims = Jwts.parserBuilder().setSigningKey(getSigningKey()).build()
+                    .parseClaimsJws(token).getBody();
+            return claims.getExpiration().before(new Date());
+        } catch (JwtException | IllegalArgumentException e) {
+            return true;
+        }
+    }
+}
+```
+
+#### JwtAuthenticationFilter2.java
+```java
+package com.simplebanking.security;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+import java.io.IOException;
+import java.util.Collections;
+
+@Component
+public class JwtAuthenticationFilter2 extends OncePerRequestFilter {
+    
+    @Autowired
+    private JwtUtil2 jwtUtil;
+    
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+                                  FilterChain filterChain) throws ServletException, IOException {
+        
+        final String authorizationHeader = request.getHeader("Authorization");
+        
+        String username = null;
+        String jwtToken = null;
+        Integer userId = null;
+        String userType = null;
+        String department = null;
+        
+        if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
+            jwtToken = authorizationHeader.substring(7);
+            try {
+                if (jwtUtil.validateToken(jwtToken)) {
+                    username = jwtUtil.getUsernameFromToken(jwtToken);
+                    userId = jwtUtil.getUserIdFromToken(jwtToken);
+                    userType = jwtUtil.getUserTypeFromToken(jwtToken);
+                    department = jwtUtil.getDepartmentFromToken(jwtToken);
+                }
+            } catch (Exception e) {
+                logger.error("JWT validation failed: " + e.getMessage());
+            }
+        }
+        
+        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            if (!jwtUtil.isTokenExpired(jwtToken)) {
+                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                        username, null, Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + userType)));
+                
+                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                
+                // Store user info in request attributes for controllers to access
+                request.setAttribute("userId", userId);
+                request.setAttribute("username", username);
+                request.setAttribute("userType", userType);
+                request.setAttribute("department", department);
+                
+                SecurityContextHolder.getContext().setAuthentication(authToken);
+            }
+        }
+        
+        filterChain.doFilter(request, response);
+    }
+}
+```
+
+#### SecurityConfig2.java
+```java
+package com.simplebanking.config;
+
+import com.simplebanking.security.JwtAuthenticationFilter2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import java.util.Arrays;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig2 {
+    
+    @Autowired
+    private JwtAuthenticationFilter2 jwtAuthenticationFilter;
+    
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http.cors().and().csrf().disable()
+            .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            .and()
+            .authorizeHttpRequests(authz -> authz
+                .requestMatchers("/api/auth2/**").permitAll() // Allow authentication endpoints
+                .requestMatchers("/api/accounts2/**").authenticated() // Require authentication for accounts
+                .requestMatchers("/api/transactions2/**").authenticated() // Require authentication for transactions
+                .requestMatchers("/api/data2/**").authenticated() // Require authentication for formatted data
+                .requestMatchers("/api/users2/**").authenticated() // Require authentication for users
+                .anyRequest().authenticated()
+            )
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        
+        return http.build();
+    }
+    
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+    
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setAllowCredentials(true);
+        
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+}
+```
+
+### Step 6: Service Classes
+
+#### UserService2.java
+```java
+package com.simplebanking.service;
+
+import com.simplebanking.model.User2;
+import com.simplebanking.repository.UserRepository2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import java.util.List;
+import java.util.Optional;
+
+@Service
+public class UserService2 {
+    
+    @Autowired
+    private UserRepository2 userRepository;
+    
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+    
+    public List<User2> getAllUsers() {
+        return userRepository.findAll();
+    }
+    
+    public User2 getUserById(Integer userId) {
+        Optional<User2> user = userRepository.findById(userId);
+        if (user.isPresent()) {
+            return user.get();
+        }
+        throw new RuntimeException("User not found with ID: " + userId);
+    }
+    
+    public User2 getUserByUsername(String username) {
+        Optional<User2> user = userRepository.findByUsername(username);
+        if (user.isPresent()) {
+            return user.get();
+        }
+        throw new RuntimeException("User not found with username: " + username);
+    }
+    
+    public User2 getUserByEmail(String email) {
+        Optional<User2> user = userRepository.findByEmail(email);
+        if (user.isPresent()) {
+            return user.get();
+        }
+        throw new RuntimeException("User not found with email: " + email);
+    }
+    
+    public User2 authenticateUser(String username, String password) {
+        User2 user = getUserByUsername(username);
+        if (passwordEncoder.matches(password, user.getPassword())) {
+            // Reset failed attempts on successful login
+            user.setFailedAttempts(0);
+            userRepository.save(user);
+            return user;
+        } else {
+            // Increment failed attempts
+            user.setFailedAttempts(user.getFailedAttempts() + 1);
+            userRepository.save(user);
+            throw new RuntimeException("Invalid credentials");
+        }
+    }
+    
+    public boolean isEmployee(Integer userId) {
+        User2 user = getUserById(userId);
+        return "EMPLOYEE".equals(user.getUserType());
+    }
+    
+    public boolean isManager(Integer userId) {
+        User2 user = getUserById(userId);
+        return "MANAGER".equals(user.getUserType());
+    }
+    
+    public List<User2> getUsersByDepartment(String department) {
+        return userRepository.findByUserDepartment(department);
+    }
+    
+    public List<User2> getUsersByUserType(String userType) {
+        return userRepository.findByUserType(userType);
+    }
+    
+    public User2 createUser(User2 user) {
+        // Encode password before saving
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        return userRepository.save(user);
+    }
+    
+    public User2 updateUser(User2 user) {
+        return userRepository.save(user);
+    }
+    
+    public void deleteUser(Integer userId) {
+        userRepository.deleteById(userId);
+    }
+    
+    public boolean existsByUsername(String username) {
+        return userRepository.existsByUsername(username);
+    }
+    
+    public boolean existsByEmail(String email) {
+        return userRepository.existsByEmail(email);
+    }
+}
+```
+
+#### AccountService2.java
+```java
+package com.simplebanking.service;
+
+import com.simplebanking.model.Account2;
+import com.simplebanking.repository.AccountRepository2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import java.util.List;
+import java.util.Optional;
+
+@Service
+public class AccountService2 {
+    
+    @Autowired
+    private AccountRepository2 accountRepository;
+    
+    public List<Account2> getAllAccounts() {
+        return accountRepository.findAll();
+    }
+    
+    public Account2 getAccountById(Integer accountId) {
+        Optional<Account2> account = accountRepository.findById(accountId);
+        if (account.isPresent()) {
+            return account.get();
+        }
+        throw new RuntimeException("Account not found with ID: " + accountId);
+    }
+    
+    public List<Account2> getAccountsByUserId(Integer userId) {
+        return accountRepository.findByUserId(userId);
+    }
+    
+    public Account2 getAccountByAccountNumber(String accountNumber) {
+        Optional<Account2> account = accountRepository.findByAccountNumber(accountNumber);
+        if (account.isPresent()) {
+            return account.get();
+        }
+        throw new RuntimeException("Account not found with account number: " + accountNumber);
+    }
+    
+    public List<Account2> getActiveAccountsByUserId(Integer userId) {
+        return accountRepository.findByUserIdAndStatus(userId, "Active");
+    }
+    
+    public Account2 createAccount(Account2 account) {
+        return accountRepository.save(account);
+    }
+    
+    public Account2 updateAccount(Account2 account) {
+        return accountRepository.save(account);
+    }
+    
+    public void deleteAccount(Integer accountId) {
+        accountRepository.deleteById(accountId);
+    }
+}
+```
+
+#### TransactionService2.java
+```java
+package com.simplebanking.service;
+
+import com.simplebanking.model.Transaction2;
+import com.simplebanking.repository.TransactionRepository2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import java.util.List;
+import java.util.Optional;
+
+@Service
+public class TransactionService2 {
+    
+    @Autowired
+    private TransactionRepository2 transactionRepository;
+    
+    @Autowired
+    private UserService2 userService;
+    
+    public List<Transaction2> getAllTransactions() {
+        return transactionRepository.findAll();
+    }
+    
+    public Transaction2 getTransactionById(Integer transactionId) {
+        Optional<Transaction2> transaction = transactionRepository.findById(transactionId);
+        if (transaction.isPresent()) {
+            return transaction.get();
+        }
+        throw new RuntimeException("Transaction not found with ID: " + transactionId);
+    }
+    
+    public List<Transaction2> getTransactionsByAccountId(Integer accountId, Integer userId) {
+        // Verify that the account belongs to the user or user is a manager
+        if (userService.isManager(userId)) {
+            return transactionRepository.findByAccountId(accountId);
+        }
+        
+        // For employees, they can only see their own transactions
+        List<Transaction2> userTransactions = transactionRepository.findByUserId(userId);
+        return userTransactions.stream()
+            .filter(txn -> txn.getAccountId().equals(accountId))
+            .toList();
+    }
+    
+    public List<Transaction2> getTransactionsByUserId(Integer userId) {
+        return transactionRepository.findByUserId(userId);
+    }
+    
+    public List<Transaction2> getRecentTransactionsByAccountId(Integer accountId) {
+        return transactionRepository.findRecentTransactionsByAccountId(accountId);
+    }
+    
+    public Transaction2 createTransaction(Transaction2 transaction) {
+        return transactionRepository.save(transaction);
+    }
+    
+    public Transaction2 updateTransaction(Transaction2 transaction) {
+        return transactionRepository.save(transaction);
+    }
+    
+    public void deleteTransaction(Integer transactionId) {
+        transactionRepository.deleteById(transactionId);
+    }
+}
+```
+
+#### CurrencyService2.java
+```java
+package com.simplebanking.service;
+
+import org.springframework.stereotype.Service;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.HashMap;
+import java.util.Map;
+
+@Service
+public class CurrencyService2 {
+    
+    // Exchange rates from INR (as of sample data)
+    private static final Map<String, BigDecimal> EXCHANGE_RATES = new HashMap<>();
+    
+    static {
+        EXCHANGE_RATES.put("IN", new BigDecimal("1.00"));    // Indian Rupee (base)
+        EXCHANGE_RATES.put("US", new BigDecimal("0.012"));   // US Dollar
+        EXCHANGE_RATES.put("UK", new BigDecimal("0.0095"));  // British Pound
+        EXCHANGE_RATES.put("CA", new BigDecimal("0.016"));   // Canadian Dollar
+        EXCHANGE_RATES.put("AU", new BigDecimal("0.018"));   // Australian Dollar
+        EXCHANGE_RATES.put("JP", new BigDecimal("1.78"));    // Japanese Yen
+        EXCHANGE_RATES.put("FR", new BigDecimal("0.011"));   // Euro (France)
+        EXCHANGE_RATES.put("DE", new BigDecimal("0.011"));   // Euro (Germany)
+        EXCHANGE_RATES.put("AE", new BigDecimal("0.044"));   // UAE Dirham
+        EXCHANGE_RATES.put("SG", new BigDecimal("0.016"));   // Singapore Dollar
+    }
+    
+    private static final Map<String, String> CURRENCY_SYMBOLS = new HashMap<>();
+    
+    static {
+        CURRENCY_SYMBOLS.put("IN", "₹");
+        CURRENCY_SYMBOLS.put("US", "$");
+        CURRENCY_SYMBOLS.put("UK", "£");
+        CURRENCY_SYMBOLS.put("CA", "C$");
+        CURRENCY_SYMBOLS.put("AU", "A$");
+        CURRENCY_SYMBOLS.put("JP", "¥");
+        CURRENCY_SYMBOLS.put("FR", "€");
+        CURRENCY_SYMBOLS.put("DE", "€");
+        CURRENCY_SYMBOLS.put("AE", "د.إ");
+        CURRENCY_SYMBOLS.put("SG", "S$");
+    }
+    
+    public BigDecimal convertFromINR(BigDecimal amountInINR, String targetCountry) {
+        if ("IN".equals(targetCountry)) {
+            return amountInINR; // No conversion needed
+        }
+        
+        BigDecimal rate = EXCHANGE_RATES.get(targetCountry);
+        if (rate == null) {
+            return amountInINR; // Default to INR if country not supported
+        }
+        
+        return amountInINR.multiply(rate).setScale(2, RoundingMode.HALF_UP);
+    }
+    
+    public String getCurrencySymbol(String countryCode) {
+        return CURRENCY_SYMBOLS.getOrDefault(countryCode, "₹");
+    }
+    
+    public String formatAmount(BigDecimal amount, String countryCode) {
+        String symbol = getCurrencySymbol(countryCode);
+        return symbol + String.format("%.2f", amount);
+    }
+}
+```
+
+### Step 7: Controller Classes
+
+#### AuthController2.java
+```java
+package com.simplebanking.controller;
+
+import com.simplebanking.model.User2;
+import com.simplebanking.service.UserService2;
+import com.simplebanking.security.JwtUtil2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import java.util.HashMap;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/auth2")
+@CrossOrigin(origins = "http://localhost:3000")
+public class AuthController2 {
+    
+    @Autowired
+    private UserService2 userService;
+    
+    @Autowired
+    private JwtUtil2 jwtUtil;
+    
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestBody Map<String, String> loginRequest) {
+        try {
+            String username = loginRequest.get("username");
+            String password = loginRequest.get("password");
+            
+            User2 user = userService.authenticateUser(username, password);
+            
+            // Generate JWT token
+            String token = jwtUtil.generateToken(
+                user.getId(), 
+                user.getUsername(), 
+                user.getUserType(), 
+                user.getUserDepartment()
+            );
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("token", token);
+            response.put("userId", user.getId());
+            response.put("username", user.getUsername());
+            response.put("userType", user.getUserType());
+            response.put("department", user.getUserDepartment());
+            response.put("fullName", user.getFullName());
+            response.put("country", user.getCountry());
+            response.put("message", "Login successful");
+            
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.status(401).body(errorResponse);
+        }
+    }
+    
+    @PostMapping("/register")
+    public ResponseEntity<?> register(@RequestBody User2 user) {
+        try {
+            // Check if username or email already exists
+            if (userService.existsByUsername(user.getUsername())) {
+                throw new RuntimeException("Username already exists");
+            }
+            if (userService.existsByEmail(user.getEmail())) {
+                throw new RuntimeException("Email already exists");
+            }
+            
+            // Set default values
+            user.setFailedAttempts(0);
+            user.setStatus("Active");
+            if (user.getCountry() == null) {
+                user.setCountry("IN");
+            }
+            if (user.getUserType() == null) {
+                user.setUserType("EMPLOYEE");
+            }
+            
+            User2 createdUser = userService.createUser(user);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "User registered successfully");
+            response.put("userId", createdUser.getId());
+            response.put("username", createdUser.getUsername());
+            
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.status(400).body(errorResponse);
+        }
+    }
+    
+    @PostMapping("/validate")
+    public ResponseEntity<?> validateToken(@RequestHeader("Authorization") String authHeader) {
+        try {
+            String token = authHeader.substring(7); // Remove "Bearer " prefix
+            
+            if (jwtUtil.validateToken(token) && !jwtUtil.isTokenExpired(token)) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("valid", true);
+                response.put("userId", jwtUtil.getUserIdFromToken(token));
+                response.put("username", jwtUtil.getUsernameFromToken(token));
+                response.put("userType", jwtUtil.getUserTypeFromToken(token));
+                response.put("department", jwtUtil.getDepartmentFromToken(token));
+                
+                return ResponseEntity.ok(response);
+            } else {
+                throw new RuntimeException("Invalid or expired token");
+            }
+        } catch (Exception e) {
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Invalid token");
+            return ResponseEntity.status(401).body(errorResponse);
+        }
+    }
+}
+```
+
+#### AccountController2.java
+```java
+package com.simplebanking.controller;
+
+import com.simplebanking.model.Account2;
+import com.simplebanking.service.AccountService2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/accounts2")
+@CrossOrigin(origins = "http://localhost:3000")
+public class AccountController2 {
+    
+    @Autowired
+    private AccountService2 accountService;
+    
+    @GetMapping
+    public ResponseEntity<List<Account2>> getAllAccounts(HttpServletRequest request) {
+        String userType = (String) request.getAttribute("userType");
+        
+        if ("MANAGER".equals(userType)) {
+            return ResponseEntity.ok(accountService.getAllAccounts());
+        } else {
+            Integer userId = (Integer) request.getAttribute("userId");
+            return ResponseEntity.ok(accountService.getAccountsByUserId(userId));
+        }
+    }
+    
+    @GetMapping("/{accountId}")
+    public ResponseEntity<Account2> getAccountById(@PathVariable Integer accountId, 
+                                                  HttpServletRequest request) {
+        try {
+            Account2 account = accountService.getAccountById(accountId);
+            
+            // Check if user has access to this account
+            Integer userId = (Integer) request.getAttribute("userId");
+            String userType = (String) request.getAttribute("userType");
+            
+            if (!"MANAGER".equals(userType) && !account.getUserId().equals(userId)) {
+                return ResponseEntity.status(403).build();
+            }
+            
+            return ResponseEntity.ok(account);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+    
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<List<Account2>> getAccountsByUserId(@PathVariable Integer userId,
+                                                             HttpServletRequest request) {
+        // Check access rights
+        Integer requestUserId = (Integer) request.getAttribute("userId");
+        String userType = (String) request.getAttribute("userType");
+        
+        if (!"MANAGER".equals(userType) && !userId.equals(requestUserId)) {
+            return ResponseEntity.status(403).build();
+        }
+        
+        return ResponseEntity.ok(accountService.getAccountsByUserId(userId));
+    }
+    
+    @PostMapping
+    public ResponseEntity<Account2> createAccount(@RequestBody Account2 account,
+                                                 HttpServletRequest request) {
+        String userType = (String) request.getAttribute("userType");
+        
+        if (!"MANAGER".equals(userType)) {
+            return ResponseEntity.status(403).build();
+        }
+        
+        try {
+            Account2 createdAccount = accountService.createAccount(account);
+            return ResponseEntity.ok(createdAccount);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    @PutMapping("/{accountId}")
+    public ResponseEntity<Account2> updateAccount(@PathVariable Integer accountId,
+                                                 @RequestBody Account2 account,
+                                                 HttpServletRequest request) {
+        String userType = (String) request.getAttribute("userType");
+        
+        if (!"MANAGER".equals(userType)) {
+            return ResponseEntity.status(403).build();
+        }
+        
+        try {
+            account.setAccountId(accountId);
+            Account2 updatedAccount = accountService.updateAccount(account);
+            return ResponseEntity.ok(updatedAccount);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    @DeleteMapping("/{accountId}")
+    public ResponseEntity<Void> deleteAccount(@PathVariable Integer accountId,
+                                             HttpServletRequest request) {
+        String userType = (String) request.getAttribute("userType");
+        
+        if (!"MANAGER".equals(userType)) {
+            return ResponseEntity.status(403).build();
+        }
+        
+        try {
+            accountService.deleteAccount(accountId);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+}
+```
+
+#### TransactionController2.java
+```java
+package com.simplebanking.controller;
+
+import com.simplebanking.model.Transaction2;
+import com.simplebanking.service.TransactionService2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/transactions2")
+@CrossOrigin(origins = "http://localhost:3000")
+public class TransactionController2 {
+    
+    @Autowired
+    private TransactionService2 transactionService;
+    
+    @GetMapping
+    public ResponseEntity<List<Transaction2>> getAllTransactions(HttpServletRequest request) {
+        String userType = (String) request.getAttribute("userType");
+        
+        if ("MANAGER".equals(userType)) {
+            return ResponseEntity.ok(transactionService.getAllTransactions());
+        } else {
+            Integer userId = (Integer) request.getAttribute("userId");
+            return ResponseEntity.ok(transactionService.getTransactionsByUserId(userId));
+        }
+    }
+    
+    @GetMapping("/{transactionId}")
+    public ResponseEntity<Transaction2> getTransactionById(@PathVariable Integer transactionId,
+                                                          HttpServletRequest request) {
+        try {
+            Transaction2 transaction = transactionService.getTransactionById(transactionId);
+            
+            // Check access rights
+            Integer userId = (Integer) request.getAttribute("userId");
+            String userType = (String) request.getAttribute("userType");
+            
+            if (!"MANAGER".equals(userType)) {
+                // Verify transaction belongs to user
+                List<Transaction2> userTransactions = transactionService.getTransactionsByUserId(userId);
+                boolean hasAccess = userTransactions.stream()
+                    .anyMatch(t -> t.getTransactionId().equals(transactionId));
+                
+                if (!hasAccess) {
+                    return ResponseEntity.status(403).build();
+                }
+            }
+            
+            return ResponseEntity.ok(transaction);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+    
+    @GetMapping("/account/{accountId}")
+    public ResponseEntity<List<Transaction2>> getTransactionsByAccountId(@PathVariable Integer accountId,
+                                                                        HttpServletRequest request) {
+        Integer userId = (Integer) request.getAttribute("userId");
+        
+        try {
+            List<Transaction2> transactions = transactionService.getTransactionsByAccountId(accountId, userId);
+            return ResponseEntity.ok(transactions);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(403).build();
+        }
+    }
+    
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<List<Transaction2>> getTransactionsByUserId(@PathVariable Integer userId,
+                                                                     HttpServletRequest request) {
+        // Check access rights
+        Integer requestUserId = (Integer) request.getAttribute("userId");
+        String userType = (String) request.getAttribute("userType");
+        
+        if (!"MANAGER".equals(userType) && !userId.equals(requestUserId)) {
+            return ResponseEntity.status(403).build();
+        }
+        
+        return ResponseEntity.ok(transactionService.getTransactionsByUserId(userId));
+    }
+    
+    @PostMapping
+    public ResponseEntity<Transaction2> createTransaction(@RequestBody Transaction2 transaction,
+                                                         HttpServletRequest request) {
+        String userType = (String) request.getAttribute("userType");
+        
+        if (!"MANAGER".equals(userType)) {
+            return ResponseEntity.status(403).build();
+        }
+        
+        try {
+            Transaction2 createdTransaction = transactionService.createTransaction(transaction);
+            return ResponseEntity.ok(createdTransaction);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+}
+```
+
+#### DataController2.java
+```java
+package com.simplebanking.controller;
+
+import com.simplebanking.model.Account2;
+import com.simplebanking.model.Transaction2;
+import com.simplebanking.model.User2;
+import com.simplebanking.service.AccountService2;
+import com.simplebanking.service.TransactionService2;
+import com.simplebanking.service.UserService2;
+import com.simplebanking.service.CurrencyService2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
+import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/api/data2")
+@CrossOrigin(origins = "http://localhost:3000")
+public class DataController2 {
+    
+    @Autowired
+    private AccountService2 accountService;
+    
+    @Autowired
+    private TransactionService2 transactionService;
+    
+    @Autowired
+    private UserService2 userService;
+    
+    @Autowired
+    private CurrencyService2 currencyService;
+    
+    @GetMapping("/account/{accountId}/user/{userId}/formatted")
+    public ResponseEntity<?> getFormattedAccountData(@PathVariable Integer accountId, 
+                                                    @PathVariable Integer userId,
+                                                    HttpServletRequest request) {
+        try {
+            // Check access rights
+            Integer requestUserId = (Integer) request.getAttribute("userId");
+            String userType = (String) request.getAttribute("userType");
+            
+            if (!"MANAGER".equals(userType) && !userId.equals(requestUserId)) {
+                return ResponseEntity.status(403).body("Access denied");
+            }
+            
+            // Get user info for currency conversion
+            User2 user = userService.getUserById(userId);
+            String userCountry = user.getCountry();
+            
+            // Get account info
+            List<Account2> accounts = accountService.getAccountsByUserId(userId);
+            Account2 account = accounts.stream()
+                .filter(acc -> acc.getAccountId().equals(accountId))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+            
+            // Get transactions
+            List<Transaction2> transactions = transactionService.getTransactionsByAccountId(accountId, userId);
+            
+            // Convert account balance
+            BigDecimal convertedAccountBalance = currencyService.convertFromINR(account.getCurrentBalance(), userCountry);
+            
+            // Format data for frontend
+            Map<String, Object> accountData = new HashMap<>();
+            accountData.put("company", account.getBankName());
+            accountData.put("accountNumber", account.getAccountNumber());
+            accountData.put("role", user.getUserType());
+            accountData.put("department", user.getUserDepartment());
+            accountData.put("status", account.getStatus());
+            accountData.put("lastLogin", "2025-08-05 10:30 AM");
+            accountData.put("country", userCountry);
+            accountData.put("fullName", user.getFullName());
+            
+            Map<String, Object> accountSummary = new HashMap<>();
+            accountSummary.put("accountType", account.getAccountType());
+            accountSummary.put("ifsc", account.getIfscCode());
+            accountSummary.put("micr", "123456789");
+            accountSummary.put("nomination", "Registered");
+            accountSummary.put("currentBalance", currencyService.formatAmount(convertedAccountBalance, userCountry));
+            accountSummary.put("asOnDate", "2025-08-05");
+            
+            Map<String, String> statementRange = new HashMap<>();
+            statementRange.put("from", "2025-08-01");
+            statementRange.put("to", "2025-08-05");
+            accountSummary.put("statementRange", statementRange);
+            
+            // Convert transaction amounts
+            List<Map<String, Object>> formattedTransactions = transactions.stream()
+                .map(txn -> {
+                    Map<String, Object> txnMap = new HashMap<>();
+                    BigDecimal convertedTxnAmount = currencyService.convertFromINR(txn.getAmount(), userCountry);
+                    BigDecimal convertedTxnBalance = currencyService.convertFromINR(txn.getBalanceAfter(), userCountry);
+                    
+                    txnMap.put("date", txn.getTransactionDate().toString());
+                    txnMap.put("description", txn.getDescription());
+                    txnMap.put("reference", txn.getReferenceNumber());
+                    txnMap.put("type", txn.getTransactionType());
+                    txnMap.put("amount", currencyService.formatAmount(convertedTxnAmount, userCountry));
+                    txnMap.put("balance", currencyService.formatAmount(convertedTxnBalance, userCountry));
+                    txnMap.put("amountINR", "₹" + String.format("%.2f", txn.getAmount()));
+                    txnMap.put("balanceINR", "₹" + String.format("%.2f", txn.getBalanceAfter()));
+                    return txnMap;
+                })
+                .collect(Collectors.toList());
+            
+            accountSummary.put("transactions", formattedTransactions);
+            accountData.put("accountSummary", accountSummary);
+            
+            return ResponseEntity.ok(accountData);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(403).body(e.getMessage());
+        }
+    }
+    
+    // Get transaction print data
+    @GetMapping("/transaction/{transactionId}/user/{userId}/print")
+    public ResponseEntity<?> getTransactionPrintData(@PathVariable Integer transactionId,
+                                                   @PathVariable Integer userId,
+                                                   HttpServletRequest request) {
+        try {
+            // Check access rights
+            Integer requestUserId = (Integer) request.getAttribute("userId");
+            String userType = (String) request.getAttribute("userType");
+            
+            if (!"MANAGER".equals(userType) && !userId.equals(requestUserId)) {
+                return ResponseEntity.status(403).body("Access denied");
+            }
+            
+            User2 user = userService.getUserById(userId);
+            
+            if (!userService.isEmployee(userId)) {
+                throw new RuntimeException("Access denied. Only employees can print transactions.");
+            }
+            
+            // Find transaction in user's accounts
+            List<Transaction2> userTransactions = transactionService.getTransactionsByUserId(userId);
+            Transaction2 transaction = userTransactions.stream()
+                .filter(txn -> txn.getTransactionId().equals(transactionId))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Transaction not found"));
+            
+            // Get account details
+            List<Account2> accounts = accountService.getAccountsByUserId(userId);
+            Account2 account = accounts.stream()
+                .filter(acc -> acc.getAccountId().equals(transaction.getAccountId()))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+            
+            // Prepare print data
+            Map<String, Object> printData = new HashMap<>();
+            printData.put("bankName", account.getBankName());
+            printData.put("generatedBy", user.getFullName());
+            printData.put("generatedOn", java.time.LocalDateTime.now().toString());
+            printData.put("yourReference", transaction.getReferenceNumber());
+            printData.put("paymentAmount", currencyService.formatAmount(transaction.getAmount(), user.getCountry()));
+            printData.put("paymentReference", transaction.getReferenceNumber());
+            printData.put("paymentType", transaction.getTransactionType());
+            printData.put("status", "Completed");
+            printData.put("payFrom", account.getAccountNumber());
+            printData.put("ifscCode", account.getIfscCode());
+            printData.put("companyName", user.getFullName());
+            printData.put("paymentDate", transaction.getTransactionDate().toString());
+            printData.put("debitDate", transaction.getTransactionDate().toString());
+            printData.put("description", transaction.getDescription());
+            printData.put("accountType", account.getAccountType());
+            printData.put("country", user.getCountry());
+            
+            return ResponseEntity.ok(printData);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(403).body(e.getMessage());
+        }
+    }
+}
+```
+
+#### UserController2.java
+```java
+package com.simplebanking.controller;
+
+import com.simplebanking.model.User2;
+import com.simplebanking.service.UserService2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/users2")
+@CrossOrigin(origins = "http://localhost:3000")
+public class UserController2 {
+    
+    @Autowired
+    private UserService2 userService;
+    
+    @GetMapping
+    public ResponseEntity<List<User2>> getAllUsers(HttpServletRequest request) {
+        String userType = (String) request.getAttribute("userType");
+        
+        if (!"MANAGER".equals(userType)) {
+            return ResponseEntity.status(403).build();
+        }
+        
+        return ResponseEntity.ok(userService.getAllUsers());
+    }
+    
+    @GetMapping("/{userId}")
+    public ResponseEntity<User2> getUserById(@PathVariable Integer userId,
+                                            HttpServletRequest request) {
+        // Check access rights
+        Integer requestUserId = (Integer) request.getAttribute("userId");
+        String userType = (String) request.getAttribute("userType");
+        
+        if (!"MANAGER".equals(userType) && !userId.equals(requestUserId)) {
+            return ResponseEntity.status(403).build();
+        }
+        
+        try {
+            User2 user = userService.getUserById(userId);
+            return ResponseEntity.ok(user);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+    
+    @GetMapping("/profile")
+    public ResponseEntity<User2> getCurrentUserProfile(HttpServletRequest request) {
+        Integer userId = (Integer) request.getAttribute("userId");
+        
+        try {
+            User2 user = userService.getUserById(userId);
+            return ResponseEntity.ok(user);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+}
+```
+
+## Frontend Implementation
+
+### Step 1: Updated API Service
+
+```javascript
+// src/services/api.js
+const API_BASE_URL = 'http://localhost:8080/api';
+
+class ApiService {
+  getAuthToken() {
+    return localStorage.getItem('authToken');
+  }
+
+  getAuthHeaders() {
+    const token = this.getAuthToken();
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+  }
+
+  async login(username, password) {
+    const response = await fetch(`${API_BASE_URL}/auth2/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Login failed');
+    }
+
+    const data = await response.json();
+    
+    // Store auth data
+    localStorage.setItem('authToken', data.token);
+    localStorage.setItem('userId', data.userId);
+    localStorage.setItem('username', data.username);
+    localStorage.setItem('userType', data.userType);
+    localStorage.setItem('department', data.department);
+    localStorage.setItem('fullName', data.fullName);
+    localStorage.setItem('country', data.country);
+    
+    return data;
+  }
+
+  async register(userData) {
+    const response = await fetch(`${API_BASE_URL}/auth2/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userData)
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Registration failed');
+    }
+
+    return await response.json();
+  }
+
+  async validateToken() {
+    const token = this.getAuthToken();
+    if (!token) return false;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth2/validate`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      return response.ok;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  logout() {
+    localStorage.clear();
+  }
+
+  async getUserAccounts() {
+    const response = await fetch(`${API_BASE_URL}/accounts2`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch accounts');
+    }
+
+    return await response.json();
+  }
+
+  async getAccountData(accountId, userId) {
+    const response = await fetch(`${API_BASE_URL}/data2/account/${accountId}/user/${userId}/formatted`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+
+    return await response.json();
+  }
+
+  async getUserTransactions() {
+    const userId = localStorage.getItem('userId');
+    const response = await fetch(`${API_BASE_URL}/transactions2/user/${userId}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch transactions');
+    }
+
+    return await response.json();
+  }
+
+  async getTransactionPrintData(transactionId, userId) {
+    const response = await fetch(`${API_BASE_URL}/data2/transaction/${transactionId}/user/${userId}/print`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+
+    return await response.json();
+  }
+
+  async getUserProfile() {
+    const response = await fetch(`${API_BASE_URL}/users2/profile`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch user profile');
+    }
+
+    return await response.json();
+  }
+
+  getCurrentUserId() {
+    return localStorage.getItem('userId');
+  }
+
+  getCurrentUserType() {
+    return localStorage.getItem('userType');
+  }
+
+  isAuthenticated() {
+    return !!this.getAuthToken();
+  }
+}
+
+export default new ApiService();
+```
+
+### Step 2: Login Component
+
+```javascript
+// src/components/Login.js
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import ApiService from '../services/api';
+import 'bootstrap/dist/css/bootstrap.min.css';
+
+const Login = ({ onLogin }) => {
+  const [credentials, setCredentials] = useState({
+    username: '',
+    password: ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await ApiService.login(credentials.username, credentials.password);
+      console.log('Login successful:', response);
+      
+      if (onLogin) {
+        onLogin(response);
+      }
+      
+      navigate('/accounts');
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChange = (e) => {
+    setCredentials({
+      ...credentials,
+      [e.target.name]: e.target.value
+    });
+  };
+
+  return (
+    <div className="container-fluid vh-100">
+      <div className="row h-100">
+        {/* Left Side - Branding */}
+        <div className="col-lg-6 bg-primary d-none d-lg-flex align-items-center justify-content-center">
+          <div className="text-center text-white">
+            <h1 className="display-4 fw-bold mb-4">Simple Banking</h1>
+            <p className="lead mb-4">Secure, Fast, and Reliable Banking Solutions</p>
+            <div className="row justify-content-center">
+              <div className="col-8">
+                <div className="row text-center">
+                  <div className="col-4">
+                    <i className="fas fa-shield-alt fa-3x mb-3"></i>
+                    <h6>Secure</h6>
+                  </div>
+                  <div className="col-4">
+                    <i className="fas fa-bolt fa-3x mb-3"></i>
+                    <h6>Fast</h6>
+                  </div>
+                  <div className="col-4">
+                    <i className="fas fa-handshake fa-3x mb-3"></i>
+                    <h6>Reliable</h6>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Side - Login Form */}
+        <div className="col-lg-6 d-flex align-items-center justify-content-center bg-light">
+          <div className="w-100" style={{ maxWidth: '400px' }}>
+            <div className="card shadow-lg border-0">
+              <div className="card-body p-5">
+                <div className="text-center mb-4">
+                  <h3 className="fw-bold text-primary">Welcome Back</h3>
+                  <p className="text-muted">Sign in to your account</p>
+                </div>
+
+                {error && (
+                  <div className="alert alert-danger" role="alert">
+                    <i className="fas fa-exclamation-triangle me-2"></i>
+                    {error}
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmit}>
+                  <div className="mb-3">
+                    <label htmlFor="username" className="form-label">Username</label>
+                    <div className="input-group">
+                      <span className="input-group-text">
+                        <i className="fas fa-user"></i>
+                      </span>
+                      <input
+                        type="text"
+                        className="form-control"
+                        id="username"
+                        name="username"
+                        value={credentials.username}
+                        onChange={handleChange}
+                        placeholder="Enter your username"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <label htmlFor="password" className="form-label">Password</label>
+                    <div className="input-group">
+                      <span className="input-group-text">
+                        <i className="fas fa-lock"></i>
+                      </span>
+                      <input
+                        type="password"
+                        className="form-control"
+                        id="password"
+                        name="password"
+                        value={credentials.password}
+                        onChange={handleChange}
+                        placeholder="Enter your password"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary w-100 py-2"
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                        Signing In...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-sign-in-alt me-2"></i>
+                        Sign In
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                {/* Demo Credentials */}
+                <div className="mt-4">
+                  <div className="text-center">
+                    <small className="text-muted">Demo Credentials:</small>
+                  </div>
+                  <div className="row mt-2">
+                    <div className="col-6">
+                      <div className="bg-light p-2 rounded text-center">
+                        <small className="fw-bold">Employee</small><br/>
+                        <small>john_employee</small><br/>
+                        <small>password</small>
+                      </div>
+                    </div>
+                    <div className="col-6">
+                      <div className="bg-light p-2 rounded text-center">
+                        <small className="fw-bold">Manager</small><br/>
+                        <small>bob_manager</small><br/>
+                        <small>password</small>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Login;
+```
+
+### Step 3: Protected Route Component
+
+```javascript
+// src/components/ProtectedRoute.js
+import React, { useEffect, useState } from 'react';
+import { Navigate } from 'react-router-dom';
+import ApiService from '../services/api';
+
+const ProtectedRoute = ({ children }) => {
+  const [isAuthenticated, setIsAuthenticated] = useState(null);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = ApiService.getAuthToken();
+      if (!token) {
+        setIsAuthenticated(false);
+        return;
+      }
+
+      const isValid = await ApiService.validateToken();
+      setIsAuthenticated(isValid);
+    };
+
+    checkAuth();
+  }, []);
+
+  if (isAuthenticated === null) {
+    return (
+      <div className="d-flex justify-content-center align-items-center vh-100">
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
+  return isAuthenticated ? children : <Navigate to="/login" />;
+};
+
+export default ProtectedRoute;
+```
+
+### Step 4: Navigation Component
+
+```javascript
+// src/components/Navigation.js
+import React from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import ApiService from '../services/api';
+import 'bootstrap/dist/css/bootstrap.min.css';
+
+const Navigation = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  const userType = localStorage.getItem('userType');
+  const fullName = localStorage.getItem('fullName');
+  const country = localStorage.getItem('country');
+
+  const handleLogout = () => {
+    ApiService.logout();
+    navigate('/login');
+  };
+
+  const getCurrencyDisplay = (country) => {
+    const currencies = {
+      'IN': 'INR', 'US': 'USD', 'UK': 'GBP', 'CA': 'CAD',
+      'AU': 'AUD', 'JP': 'JPY', 'FR': 'EUR', 'DE': 'EUR',
+      'AE': 'AED', 'SG': 'SGD'
+    };
+    return currencies[country] || 'INR';
+  };
+
+  if (!ApiService.isAuthenticated()) {
+    return null;
+  }
+
+  return (
+    <nav className="navbar navbar-expand-lg navbar-dark bg-dark shadow">
+      <div className="container">
+        <Link className="navbar-brand fw-bold" to="/accounts">
+          <i className="fas fa-university me-2"></i>
+          Simple Banking
+        </Link>
+
+        <button 
+          className="navbar-toggler" 
+          type="button" 
+          data-bs-toggle="collapse" 
+          data-bs-target="#navbarNav"
+        >
+          <span className="navbar-toggler-icon"></span>
+        </button>
+
+        <div className="collapse navbar-collapse" id="navbarNav">
+          <ul className="navbar-nav me-auto">
+            <li className="nav-item">
+              <Link 
+                className={`nav-link ${location.pathname === '/accounts' ? 'active' : ''}`}
+                to="/accounts"
+              >
+                <i className="fas fa-credit-card me-1"></i>
+                Accounts
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link 
+                className={`nav-link ${location.pathname === '/transactions' ? 'active' : ''}`}
+                to="/transactions"
+              >
+                <i className="fas fa-exchange-alt me-1"></i>
+                Transactions
+              </Link>
+            </li>
+          </ul>
+
+          <ul className="navbar-nav">
+            <li className="nav-item dropdown">
+              <a 
+                className="nav-link dropdown-toggle" 
+                href="#" 
+                id="navbarDropdown" 
+                role="button" 
+                data-bs-toggle="dropdown"
+              >
+                <i className="fas fa-user-circle me-1"></i>
+                {fullName}
+                <span className="badge bg-primary ms-2">{userType}</span>
+                <span className="badge bg-info ms-1">{getCurrencyDisplay(country)}</span>
+              </a>
+              <ul className="dropdown-menu">
+                <li>
+                  <span className="dropdown-item-text">
+                    <strong>Role:</strong> {userType}<br/>
+                    <strong>Country:</strong> {country}<br/>
+                    <strong>Currency:</strong> {getCurrencyDisplay(country)}
+                  </span>
+                </li>
+                <li><hr className="dropdown-divider" /></li>
+                <li>
+                  <button className="dropdown-item" onClick={handleLogout}>
+                    <i className="fas fa-sign-out-alt me-2"></i>
+                    Logout
+                  </button>
+                </li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+  );
+};
+
+export default Navigation;
+```
+
+### Step 5: Updated App.js
+
+```javascript
+// src/App.js
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import Login from './components/Login';
+import Navigation from './components/Navigation';
+import ProtectedRoute from './components/ProtectedRoute';
+import AccountsPage from './components/AccountsPage';
+import AccountStatement from './components/AccountStatement';
+import AccountTransactionsPage from './components/AccountTransactionsPage';
+import ApiService from './services/api';
+import 'bootstrap/dist/css/bootstrap.min.css';
+import 'bootstrap/dist/js/bootstrap.bundle.min.js';
+
+function App() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      if (ApiService.isAuthenticated()) {
+        const isValid = await ApiService.validateToken();
+        if (isValid) {
+          setUser({
+            userId: localStorage.getItem('userId'),
+            username: localStorage.getItem('username'),
+            userType: localStorage.getItem('userType'),
+            fullName: localStorage.getItem('fullName'),
+            country: localStorage.getItem('country')
+          });
+        } else {
+          ApiService.logout();
+        }
+      }
+      setLoading(false);
+    };
+
+    checkAuthStatus();
+  }, []);
+
+  const handleLogin = (userData) => {
+    setUser(userData);
+  };
+
+  if (loading) {
+    return (
+      <div className="d-flex justify-content-center align-items-center vh-100">
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Router>
+      <div className="App">
+        <Navigation />
+        <Routes>
+          <Route 
+            path="/login" 
+            element={
+              user ? <Navigate to="/accounts" /> : <Login onLogin={handleLogin} />
+            } 
+          />
+          <Route 
+            path="/accounts" 
+            element={
+              <ProtectedRoute>
+                <AccountsPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/statement" 
+            element={
+              <ProtectedRoute>
+                <AccountStatement />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/transactions" 
+            element={
+              <ProtectedRoute>
+                <AccountTransactionsPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/" 
+            element={<Navigate to={user ? "/accounts" : "/login"} />} 
+          />
+        </Routes>
+      </div>
+    </Router>
+  );
+}
+
+export default App;
+```
+
+### Step 6: Updated AccountsPage Component
+
+```javascript
+// src/components/AccountsPage.js
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import ApiService from '../services/api';
+import 'bootstrap/dist/css/bootstrap.min.css';
+
+const AccountsPage = () => {
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
+
+  const userType = localStorage.getItem('userType');
+  const fullName = localStorage.getItem('fullName');
+  const country = localStorage.getItem('country');
+
+  useEffect(() => {
+    fetchAccounts();
+  }, []);
+
+  const fetchAccounts = async () => {
+    try {
+      setLoading(true);
+      const data = await ApiService.getUserAccounts();
+      setAccounts(data);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAccountClick = async (account) => {
+    try {
+      const userId = ApiService.getCurrentUserId();
+      const accountData = await ApiService.getAccountData(account.accountId, parseInt(userId));
+      navigate('/statement', { state: { account: accountData } });
+    } catch (error) {
+      alert('Error fetching account data: ' + error.message);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="container mt-5 text-center">
+        <div className="spinner-border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+        <p className="mt-2">Loading your accounts...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mt-5">
+        <div className="alert alert-danger" role="alert">
+          <h4 className="alert-heading">Error!</h4>
+          <p>{error}</p>
+          <button className="btn btn-outline-danger" onClick={fetchAccounts}>
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mt-4">
+      {/* Header */}
+      <div className="row mb-4">
+        <div className="col-12">
+          <div className="bg-primary text-white p-4 rounded">
+            <h2>Welcome, {fullName}</h2>
+            <p className="mb-0">
+              Role: {userType} | Country: {country} | 
+              <span className="badge bg-light text-primary ms-2">
+                {accounts.length} Account{accounts.length !== 1 ? 's' : ''}
+              </span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Currency Info */}
+      {country !== 'IN' && (
+        <div className="alert alert-info mb-4">
+          <i className="fas fa-info-circle me-2"></i>
+          <strong>Currency Display:</strong> All amounts will be shown in your local currency 
+          ({country === 'US' ? 'USD' : country === 'UK' ? 'GBP' : country === 'CA' ? 'CAD' : 
+            country === 'AU' ? 'AUD' : 'Local Currency'}).
+        </div>
+      )}
+
+      {/* Accounts Grid */}
+      <div className="row">
+        {accounts.length === 0 ? (
+          <div className="col-12">
+            <div className="alert alert-info text-center">
+              <h5>No accounts found</h5>
+              <p>You don't have any accounts associated with your profile.</p>
+            </div>
+          </div>
+        ) : (
+          accounts.map((account) => (
+            <div key={account.accountId} className="col-lg-6 col-xl-4 mb-4">
+              <div 
+                className="card h-100 shadow-sm border-0"
+                style={{ cursor: 'pointer', transition: 'transform 0.2s' }}
+                onClick={() => handleAccountClick(account)}
+                onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-5px)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <div className="card-header bg-gradient text-white" 
+                     style={{ 
+                       background: account.accountType === 'Savings' 
+                         ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                         : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
+                     }}>
+                  <div className="d-flex justify-content-between align-items-center">
+                    <h6 className="mb-0">
+                      <i className={`fas fa-${account.accountType === 'Savings' ? 'piggy-bank' : 'briefcase'} me-2`}></i>
+                      {account.accountType} Account
+                    </h6>
+                    <span className="badge bg-light text-dark">{account.status}</span>
+                  </div>
+                </div>
+                <div className="card-body">
+                  <div className="mb-3">
+                    <h5 className="text-primary">{account.bankName}</h5>
+                    <p className="text-muted mb-0">
+                      Account: ****{account.accountNumber.slice(-4)}
+                    </p>
+                  </div>
+                  
+                  <div className="row text-center">
+                    <div className="col-12 mb-3">
+                      <div className="bg-light p-3 rounded">
+                        <small className="text-muted d-block">Current Balance</small>
+                        <h4 className="mb-0 text-success">
+                          ₹{account.currentBalance.toLocaleString('en-IN')}
+                        </h4>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="row text-center small text-muted">
+                    <div className="col-6">
+                      <i className="fas fa-building me-1"></i>
+                      {account.ifscCode}
+                    </div>
+                    <div className="col-6">
+                      <i className="fas fa-calendar me-1"></i>
+                      Active
+                    </div>
+                  </div>
+                </div>
+                <div className="card-footer bg-transparent border-top-0">
+                  <div className="d-flex justify-content-between align-items-center">
+                    <small className="text-muted">Click to view statement</small>
+                    <i className="fas fa-arrow-right text-primary"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Quick Stats */}
+      {accounts.length > 0 && (
+        <div className="row mt-4">
+          <div className="col-12">
+            <div className="card border-0 shadow-sm">
+              <div className="card-header bg-light">
+                <h5 className="mb-0">
+                  <i className="fas fa-chart-pie me-2"></i>
+                  Quick Summary
+                </h5>
+              </div>
+              <div className="card-body">
+                <div className="row text-center">
+                  <div className="col-md-3">
+                    <div className="border-end">
+                      <h4 className="text-primary">{accounts.length}</h4>
+                      <small className="text-muted">Total Accounts</small>
+                    </div>
+                  </div>
+                  <div className="col-md-3">
+                    <div className="border-end">
+                      <h4 className="text-success">
+                        {accounts.filter(acc => acc.accountType === 'Savings').length}
+                      </h4>
+                      <small className="text-muted">Savings</small>
+                    </div>
+                  </div>
+                  <div className="col-md-3">
+                    <div className="border-end">
+                      <h4 className="text-info">
+                        {accounts.filter(acc => acc.accountType === 'Current').length}
+                      </h4>
+                      <small className="text-muted">Current</small>
+                    </div>
+                  </div>
+                  <div className="col-md-3">
+                    <h4 className="text-warning">
+                      ₹{accounts.reduce((sum, acc) => sum + acc.currentBalance, 0).toLocaleString('en-IN')}
+                    </h4>
+                    <small className="text-muted">Total Balance
