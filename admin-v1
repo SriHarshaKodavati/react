@@ -1,0 +1,787 @@
+# Admin Payroll System - Complete Implementation
+
+## Database Schema Updates
+
+### 1. Create batch_transactions table
+
+```sql
+-- Create batch_transactions table
+CREATE TABLE batch_transactions (
+    transaction_id INTEGER PRIMARY KEY,
+    batch_id VARCHAR(50) NOT NULL,
+    user_id INTEGER REFERENCES users2(id), -- Employee who will receive the payment
+    employee_name VARCHAR(100) NOT NULL,
+    amount DECIMAL(15,2) NOT NULL,
+    remarks VARCHAR(255),
+    status VARCHAR(20) DEFAULT 'PENDING', -- PENDING, APPROVED, REJECTED
+    created_by INTEGER REFERENCES users2(id), -- Admin who created the payroll
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    approved_at TIMESTAMP,
+    approved_by INTEGER REFERENCES users2(id)
+);
+
+-- Create payroll_batches table to track batch-level information
+CREATE TABLE payroll_batches (
+    batch_id VARCHAR(50) PRIMARY KEY,
+    batch_name VARCHAR(100) NOT NULL,
+    total_amount DECIMAL(15,2) NOT NULL,
+    total_transactions INTEGER NOT NULL,
+    status VARCHAR(20) DEFAULT 'PENDING', -- PENDING, APPROVED, REJECTED
+    created_by INTEGER REFERENCES users2(id), -- Admin who created
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    approved_at TIMESTAMP,
+    approved_by INTEGER REFERENCES users2(id),
+    description VARCHAR(500)
+);
+
+-- Sample data for testing
+INSERT INTO payroll_batches (batch_id, batch_name, total_amount, total_transactions, created_by, description) VALUES
+('BATCH_2025_001', 'January 2025 Salary', 150000.00, 3, 3, 'Monthly salary payment for January 2025'),
+('BATCH_2025_002', 'Bonus Payment Q4', 75000.00, 2, 3, 'Quarterly bonus payment for Q4 2024');
+
+INSERT INTO batch_transactions (transaction_id, batch_id, user_id, employee_name, amount, remarks, created_by) VALUES
+(1, 'BATCH_2025_001', 1, 'John Doe', 50000.00, 'January salary', 3),
+(2, 'BATCH_2025_001', 2, 'Jane Smith', 60000.00, 'January salary', 3),
+(3, 'BATCH_2025_001', 4, 'Alice Johnson', 40000.00, 'January salary', 3),
+(4, 'BATCH_2025_002', 1, 'John Doe', 25000.00, 'Q4 bonus', 3),
+(5, 'BATCH_2025_002', 2, 'Jane Smith', 50000.00, 'Q4 bonus', 3);
+
+-- Update some transactions to approved status for testing
+UPDATE batch_transactions SET status = 'APPROVED', approved_at = CURRENT_TIMESTAMP, approved_by = 3 
+WHERE batch_id = 'BATCH_2025_001';
+
+UPDATE payroll_batches SET status = 'APPROVED', approved_at = CURRENT_TIMESTAMP, approved_by = 3 
+WHERE batch_id = 'BATCH_2025_001';
+```
+
+## Backend Implementation
+
+### 1. Model Classes
+
+#### BatchTransaction2.java
+```java
+package com.simplebanking.model;
+
+import jakarta.persistence.*;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "batch_transactions")
+public class BatchTransaction2 {
+    @Id
+    @Column(name = "transaction_id")
+    private Integer transactionId;
+    
+    @Column(name = "batch_id")
+    private String batchId;
+    
+    @Column(name = "user_id")
+    private Integer userId;
+    
+    @Column(name = "employee_name")
+    private String employeeName;
+    
+    private BigDecimal amount;
+    private String remarks;
+    private String status;
+    
+    @Column(name = "created_by")
+    private Integer createdBy;
+    
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+    
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
+    
+    @Column(name = "approved_by")
+    private Integer approvedBy;
+    
+    // Constructors
+    public BatchTransaction2() {}
+    
+    // Getters and Setters
+    public Integer getTransactionId() { return transactionId; }
+    public void setTransactionId(Integer transactionId) { this.transactionId = transactionId; }
+    
+    public String getBatchId() { return batchId; }
+    public void setBatchId(String batchId) { this.batchId = batchId; }
+    
+    public Integer getUserId() { return userId; }
+    public void setUserId(Integer userId) { this.userId = userId; }
+    
+    public String getEmployeeName() { return employeeName; }
+    public void setEmployeeName(String employeeName) { this.employeeName = employeeName; }
+    
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal amount) { this.amount = amount; }
+    
+    public String getRemarks() { return remarks; }
+    public void setRemarks(String remarks) { this.remarks = remarks; }
+    
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    
+    public Integer getCreatedBy() { return createdBy; }
+    public void setCreatedBy(Integer createdBy) { this.createdBy = createdBy; }
+    
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    
+    public LocalDateTime getApprovedAt() { return approvedAt; }
+    public void setApprovedAt(LocalDateTime approvedAt) { this.approvedAt = approvedAt; }
+    
+    public Integer getApprovedBy() { return approvedBy; }
+    public void setApprovedBy(Integer approvedBy) { this.approvedBy = approvedBy; }
+}
+```
+
+#### PayrollBatch2.java
+```java
+package com.simplebanking.model;
+
+import jakarta.persistence.*;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "payroll_batches")
+public class PayrollBatch2 {
+    @Id
+    @Column(name = "batch_id")
+    private String batchId;
+    
+    @Column(name = "batch_name")
+    private String batchName;
+    
+    @Column(name = "total_amount")
+    private BigDecimal totalAmount;
+    
+    @Column(name = "total_transactions")
+    private Integer totalTransactions;
+    
+    private String status;
+    private String description;
+    
+    @Column(name = "created_by")
+    private Integer createdBy;
+    
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+    
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
+    
+    @Column(name = "approved_by")
+    private Integer approvedBy;
+    
+    // Constructors
+    public PayrollBatch2() {}
+    
+    // Getters and Setters
+    public String getBatchId() { return batchId; }
+    public void setBatchId(String batchId) { this.batchId = batchId; }
+    
+    public String getBatchName() { return batchName; }
+    public void setBatchName(String batchName) { this.batchName = batchName; }
+    
+    public BigDecimal getTotalAmount() { return totalAmount; }
+    public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
+    
+    public Integer getTotalTransactions() { return totalTransactions; }
+    public void setTotalTransactions(Integer totalTransactions) { this.totalTransactions = totalTransactions; }
+    
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+    
+    public Integer getCreatedBy() { return createdBy; }
+    public void setCreatedBy(Integer createdBy) { this.createdBy = createdBy; }
+    
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    
+    public LocalDateTime getApprovedAt() { return approvedAt; }
+    public void setApprovedAt(LocalDateTime approvedAt) { this.approvedAt = approvedAt; }
+    
+    public Integer getApprovedBy() { return approvedBy; }
+    public void setApprovedBy(Integer approvedBy) { this.approvedBy = approvedBy; }
+}
+```
+
+### 2. Repository Classes
+
+#### BatchTransactionRepository2.java
+```java
+package com.simplebanking.repository;
+
+import com.simplebanking.model.BatchTransaction2;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+import java.util.List;
+
+@Repository
+public interface BatchTransactionRepository2 extends JpaRepository<BatchTransaction2, Integer> {
+    List<BatchTransaction2> findByBatchId(String batchId);
+    List<BatchTransaction2> findByStatus(String status);
+    List<BatchTransaction2> findByCreatedBy(Integer createdBy);
+    List<BatchTransaction2> findByBatchIdAndStatus(String batchId, String status);
+}
+```
+
+#### PayrollBatchRepository2.java
+```java
+package com.simplebanking.repository;
+
+import com.simplebanking.model.PayrollBatch2;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+import java.util.List;
+
+@Repository
+public interface PayrollBatchRepository2 extends JpaRepository<PayrollBatch2, String> {
+    List<PayrollBatch2> findByStatus(String status);
+    List<PayrollBatch2> findByCreatedBy(Integer createdBy);
+    List<PayrollBatch2> findByCreatedByAndStatus(Integer createdBy, String status);
+}
+```
+
+### 3. Service Class
+
+#### PayrollService2.java
+```java
+package com.simplebanking.service;
+
+import com.simplebanking.model.*;
+import com.simplebanking.repository.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
+@Service
+public class PayrollService2 {
+    
+    @Autowired
+    private BatchTransactionRepository2 batchTransactionRepository;
+    
+    @Autowired
+    private PayrollBatchRepository2 payrollBatchRepository;
+    
+    @Autowired
+    private TransactionRepository2 transactionRepository;
+    
+    @Autowired
+    private AccountRepository2 accountRepository;
+    
+    @Autowired
+    private UserService2 userService;
+    
+    public List<PayrollBatch2> getAllPayrollBatches() {
+        return payrollBatchRepository.findAll();
+    }
+    
+    public List<PayrollBatch2> getPayrollBatchesByCreator(Integer createdBy) {
+        return payrollBatchRepository.findByCreatedBy(createdBy);
+    }
+    
+    public List<PayrollBatch2> getApprovedPayrollBatchesByCreator(Integer createdBy) {
+        return payrollBatchRepository.findByCreatedByAndStatus(createdBy, "APPROVED");
+    }
+    
+    public List<BatchTransaction2> getBatchTransactions(String batchId) {
+        return batchTransactionRepository.findByBatchId(batchId);
+    }
+    
+    public PayrollBatch2 getPayrollBatch(String batchId) {
+        Optional<PayrollBatch2> batch = payrollBatchRepository.findById(batchId);
+        if (batch.isPresent()) {
+            return batch.get();
+        }
+        throw new RuntimeException("Payroll batch not found: " + batchId);
+    }
+    
+    @Transactional
+    public void approveBatch(String batchId, Integer approvedBy) {
+        // Get batch details
+        PayrollBatch2 batch = getPayrollBatch(batchId);
+        List<BatchTransaction2> batchTransactions = getBatchTransactions(batchId);
+        
+        // Update batch status
+        batch.setStatus("APPROVED");
+        batch.setApprovedAt(LocalDateTime.now());
+        batch.setApprovedBy(approvedBy);
+        payrollBatchRepository.save(batch);
+        
+        // Process each transaction in the batch
+        for (BatchTransaction2 batchTxn : batchTransactions) {
+            // Update batch transaction status
+            batchTxn.setStatus("APPROVED");
+            batchTxn.setApprovedAt(LocalDateTime.now());
+            batchTxn.setApprovedBy(approvedBy);
+            batchTransactionRepository.save(batchTxn);
+            
+            // Add credit transaction to employee's account
+            addCreditToEmployee(batchTxn);
+        }
+    }
+    
+    private void addCreditToEmployee(BatchTransaction2 batchTxn) {
+        try {
+            // Find employee's primary account (first active account)
+            List<Account2> employeeAccounts = accountRepository.findByUserIdAndStatus(
+                batchTxn.getUserId(), "Active");
+            
+            if (employeeAccounts.isEmpty()) {
+                throw new RuntimeException("No active account found for employee: " + batchTxn.getEmployeeName());
+            }
+            
+            Account2 account = employeeAccounts.get(0); // Use first active account
+            
+            // Update account balance
+            BigDecimal newBalance = account.getCurrentBalance().add(batchTxn.getAmount());
+            account.setCurrentBalance(newBalance);
+            accountRepository.save(account);
+            
+            // Create transaction record
+            Transaction2 transaction = new Transaction2();
+            transaction.setTransactionId(generateTransactionId());
+            transaction.setAccountId(account.getAccountId());
+            transaction.setTransactionDate(LocalDate.now());
+            transaction.setDescription("Payroll Credit - " + batchTxn.getRemarks());
+            transaction.setTransactionType("Credit");
+            transaction.setAmount(batchTxn.getAmount());
+            transaction.setBalanceAfter(newBalance);
+            transaction.setReferenceNumber("PAY_" + batchTxn.getBatchId() + "_" + batchTxn.getTransactionId());
+            
+            transactionRepository.save(transaction);
+            
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to process payroll for employee: " + 
+                batchTxn.getEmployeeName() + " - " + e.getMessage());
+        }
+    }
+    
+    private Integer generateTransactionId() {
+        // Simple transaction ID generation (you might want to improve this)
+        List<Transaction2> allTransactions = transactionRepository.findAll();
+        return allTransactions.size() + 1000; // Start from 1000 to avoid conflicts
+    }
+}
+```
+
+### 4. Controller Class
+
+#### PayrollController2.java
+```java
+package com.simplebanking.controller;
+
+import com.simplebanking.model.BatchTransaction2;
+import com.simplebanking.model.PayrollBatch2;
+import com.simplebanking.service.PayrollService2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/payroll2")
+@CrossOrigin(origins = "http://localhost:3000")
+public class PayrollController2 {
+    
+    @Autowired
+    private PayrollService2 payrollService;
+    
+    // Get all payroll batches (for admin)
+    @GetMapping("/batches")
+    public ResponseEntity<List<PayrollBatch2>> getAllPayrollBatches(HttpServletRequest request) {
+        String userType = (String) request.getAttribute("userType");
+        
+        if (!"MANAGER".equals(userType)) {
+            return ResponseEntity.status(403).build();
+        }
+        
+        return ResponseEntity.ok(payrollService.getAllPayrollBatches());
+    }
+    
+    // Get payroll history for a specific admin
+    @GetMapping("/history/{createdBy}")
+    public ResponseEntity<List<PayrollBatch2>> getPayrollHistory(@PathVariable Integer createdBy,
+                                                                HttpServletRequest request) {
+        Integer requestUserId = (Integer) request.getAttribute("userId");
+        String userType = (String) request.getAttribute("userType");
+        
+        // Only managers can view payroll history, and only their own
+        if (!"MANAGER".equals(userType) || !createdBy.equals(requestUserId)) {
+            return ResponseEntity.status(403).build();
+        }
+        
+        return ResponseEntity.ok(payrollService.getApprovedPayrollBatchesByCreator(createdBy));
+    }
+    
+    // Get transactions for a specific batch
+    @GetMapping("/batch/{batchId}/transactions")
+    public ResponseEntity<List<BatchTransaction2>> getBatchTransactions(@PathVariable String batchId,
+                                                                       HttpServletRequest request) {
+        String userType = (String) request.getAttribute("userType");
+        
+        if (!"MANAGER".equals(userType)) {
+            return ResponseEntity.status(403).build();
+        }
+        
+        try {
+            List<BatchTransaction2> transactions = payrollService.getBatchTransactions(batchId);
+            return ResponseEntity.ok(transactions);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+    
+    // Get batch details with transactions
+    @GetMapping("/batch/{batchId}/details")
+    public ResponseEntity<Map<String, Object>> getBatchDetails(@PathVariable String batchId,
+                                                              HttpServletRequest request) {
+        String userType = (String) request.getAttribute("userType");
+        
+        if (!"MANAGER".equals(userType)) {
+            return ResponseEntity.status(403).build();
+        }
+        
+        try {
+            PayrollBatch2 batch = payrollService.getPayrollBatch(batchId);
+            List<BatchTransaction2> transactions = payrollService.getBatchTransactions(batchId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("batch", batch);
+            response.put("transactions", transactions);
+            
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+    
+    // Approve a batch (this will create individual transactions)
+    @PostMapping("/batch/{batchId}/approve")
+    public ResponseEntity<?> approveBatch(@PathVariable String batchId,
+                                         HttpServletRequest request) {
+        String userType = (String) request.getAttribute("userType");
+        Integer approvedBy = (Integer) request.getAttribute("userId");
+        
+        if (!"MANAGER".equals(userType)) {
+            return ResponseEntity.status(403).build();
+        }
+        
+        try {
+            payrollService.approveBatch(batchId, approvedBy);
+            
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Batch approved successfully and transactions created");
+            response.put("batchId", batchId);
+            
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.status(400).body(errorResponse);
+        }
+    }
+}
+```
+
+## Frontend Implementation
+
+### 1. API Service Update
+
+```javascript
+// Add these methods to your api.js
+class ApiService {
+  // ... existing methods ...
+
+  // Payroll API methods
+  async getPayrollHistory(createdBy) {
+    const response = await fetch(`${API_BASE_URL}/payroll2/history/${createdBy}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+
+    return await response.json();
+  }
+
+  async getBatchDetails(batchId) {
+    const response = await fetch(`${API_BASE_URL}/payroll2/batch/${batchId}/details`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+
+    return await response.json();
+  }
+
+  async approveBatch(batchId) {
+    const response = await fetch(`${API_BASE_URL}/payroll2/batch/${batchId}/approve`, {
+      method: 'POST',
+      headers: this.getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+
+    return await response.json();
+  }
+}
+```
+
+### 2. Payroll History Component
+
+```javascript
+// src/components/PayrollHistory.js
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import ApiService from '../services/api';
+import 'bootstrap/dist/css/bootstrap.min.css';
+
+const PayrollHistory = () => {
+  const [payrollBatches, setPayrollBatches] = useState([]);
+  const [expandedBatch, setExpandedBatch] = useState(null);
+  const [batchTransactions, setBatchTransactions] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchPayrollHistory();
+  }, []);
+
+  const fetchPayrollHistory = async () => {
+    try {
+      setLoading(true);
+      const userId = ApiService.getCurrentUserId();
+      const batches = await ApiService.getPayrollHistory(parseInt(userId));
+      setPayrollBatches(batches);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleBatchDetails = async (batchId) => {
+    if (expandedBatch === batchId) {
+      setExpandedBatch(null);
+      return;
+    }
+
+    try {
+      if (!batchTransactions[batchId]) {
+        const details = await ApiService.getBatchDetails(batchId);
+        setBatchTransactions(prev => ({
+          ...prev,
+          [batchId]: details.transactions
+        }));
+      }
+      setExpandedBatch(batchId);
+    } catch (error) {
+      alert('Error fetching batch details: ' + error.message);
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    return '₹' + parseFloat(amount).toLocaleString('en-IN');
+  };
+
+  const formatDateTime = (dateTime) => {
+    return new Date(dateTime).toLocaleString('en-IN');
+  };
+
+  if (loading) {
+    return (
+      <div className="container mt-5 text-center">
+        <div className="spinner-border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+        <p className="mt-2">Loading payroll history...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mt-4">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h2>Payroll History</h2>
+        <button className="btn btn-secondary" onClick={() => navigate(-1)}>
+          Back
+        </button>
+      </div>
+
+      {error && (
+        <div className="alert alert-danger">
+          {error}
+        </div>
+      )}
+
+      {payrollBatches.length === 0 && !loading && (
+        <div className="alert alert-info">
+          No approved payroll batches found.
+        </div>
+      )}
+
+      <div className="row">
+        {payrollBatches.map((batch, index) => (
+          <div key={batch.batchId} className="col-12 mb-3">
+            <div className="card border-0 shadow-sm">
+              <div className="card-header bg-success text-white">
+                <div className="row align-items-center">
+                  <div className="col-md-8">
+                    <h5 className="mb-0">
+                      <i className="fas fa-money-check-alt me-2"></i>
+                      {batch.batchName}
+                    </h5>
+                    <small>Batch ID: {batch.batchId}</small>
+                  </div>
+                  <div className="col-md-4 text-end">
+                    <button
+                      className="btn btn-light btn-sm"
+                      onClick={() => toggleBatchDetails(batch.batchId)}
+                    >
+                      {expandedBatch === batch.batchId ? (
+                        <>
+                          <i className="fas fa-chevron-up me-1"></i>
+                          Hide Details
+                        </>
+                      ) : (
+                        <>
+                          <i className="fas fa-chevron-down me-1"></i>
+                          Show Details
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="card-body">
+                <div className="row">
+                  <div className="col-md-3">
+                    <strong>Total Amount:</strong><br/>
+                    <span className="text-success fs-5">{formatCurrency(batch.totalAmount)}</span>
+                  </div>
+                  <div className="col-md-3">
+                    <strong>Transactions:</strong><br/>
+                    <span className="badge bg-primary fs-6">{batch.totalTransactions}</span>
+                  </div>
+                  <div className="col-md-3">
+                    <strong>Status:</strong><br/>
+                    <span className="badge bg-success">{batch.status}</span>
+                  </div>
+                  <div className="col-md-3">
+                    <strong>Approved On:</strong><br/>
+                    <small>{formatDateTime(batch.approvedAt)}</small>
+                  </div>
+                </div>
+                
+                {batch.description && (
+                  <div className="row mt-3">
+                    <div className="col-12">
+                      <strong>Description:</strong><br/>
+                      {batch.description}
+                    </div>
+                  </div>
+                )}
+
+                {/* Expanded Transaction Details */}
+                {expandedBatch === batch.batchId && (
+                  <div className="mt-4">
+                    <h6 className="border-bottom pb-2">Individual Transactions</h6>
+                    {batchTransactions[batch.batchId] ? (
+                      <div className="table-responsive">
+                        <table className="table table-sm">
+                          <thead className="table-light">
+                            <tr>
+                              <th>Employee</th>
+                              <th>Amount</th>
+                              <th>Remarks</th>
+                              <th>Status</th>
+                              <th>Approved On</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {batchTransactions[batch.batchId].map((txn) => (
+                              <tr key={txn.transactionId}>
+                                <td>{txn.employeeName}</td>
+                                <td className="text-success">{formatCurrency(txn.amount)}</td>
+                                <td>{txn.remarks}</td>
+                                <td>
+                                  <span className="badge bg-success">{txn.status}</span>
+                                </td>
+                                <td>
+                                  <small>{formatDateTime(txn.approvedAt)}</small>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center">
+                        <div className="spinner-border spinner-border-sm" role="status">
+                          <span className="visually-hidden">Loading...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default PayrollHistory;
+```
+
+## Summary
+
+This implementation provides:
+
+1. **Database Schema**: Two new tables for batch transactions and payroll batches
+2. **Backend Services**: Complete CRUD operations and approval workflow
+3. **API Endpoints**: RESTful APIs for managing payroll batches
+4. **Frontend Component**: Interactive payroll history view with expandable transaction details
+
+**Key Features**:
+- When a batch is approved, it automatically creates credit transactions in the employee accounts
+- Maintains relationship between batch transactions and individual account transactions
+- Provides transaction history for admins who created payrolls
+- Handles the user_id to account_id mapping automatically
+
+**Workflow**:
+1. Admin creates payroll → Records go to `batch_transactions` table
+2. Batch gets approved → Status changes to 'APPROVED'  
+3. System automatically creates individual credit transactions in `transactions2` table
+4. Employee account balances get updated
+5. Admin can view payroll history with expandable transaction details
